@@ -26,13 +26,10 @@ type LocationPageFormValues = z.infer<typeof locationPageSchema>;
 export default function AddLocationPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
-  // These state variables are used in the component
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [states, setStates] = useState<string[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [cities, setCities] = useState<{[state: string]: string[]}>({});
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const {
     register,
@@ -58,14 +55,11 @@ export default function AddLocationPage() {
   const selectedState = watch('state');
   const selectedCity = watch('city');
 
-  // Load states and cities from demo-data.ts
   useEffect(() => {
     try {
-      // Extract state names from usaStatesAndCitiesData
       const stateNames = usaStatesAndCitiesData.states.map(state => state.name);
       setStates(stateNames);
       
-      // Create a mapping of state names to city names
       const citiesMap: {[state: string]: string[]} = {};
       
       usaStatesAndCitiesData.states.forEach(state => {
@@ -81,39 +75,27 @@ export default function AddLocationPage() {
     }
   }, []);
 
-  // Function to generate content with AI
-  const generateWithAI = async () => {
+  const handleGenerateAI = async () => {
+    setIsGenerating(true);
+    setError('');
     try {
-      setIsGenerating(true);
-      setError('');
-
-      // Validate that required fields are selected
-      if (!selectedState) {
-        setError('Please select a state');
+      if ((pageType === 'state' && !selectedState) || 
+          (pageType === 'city' && (!selectedState || !selectedCity))) {
+        setError('Please select a state (and city, if applicable)');
         setIsGenerating(false);
         return;
       }
-
-      if (pageType === 'city' && !selectedCity) {
-        setError('Please select a city');
-        setIsGenerating(false);
-        return;
-      }
-
-      // Prepare request data
-      const requestData = {
-        type: pageType,
-        state: selectedState,
-        city: pageType === 'city' ? selectedCity : undefined
-      };
-
-      // Call the API
+      
       const response = await fetch('/api/generate-content', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestData),
+        body: JSON.stringify({
+          pageType,
+          state: selectedState,
+          city: selectedCity,
+        }),
       });
 
       if (!response.ok) {
@@ -122,18 +104,87 @@ export default function AddLocationPage() {
       }
 
       const data = await response.json();
-
-      // Update form fields with generated content
-      setValue('title', data.metaTitle);
-      setValue('metaDescription', data.metaDescription);
-      setValue('h1Title', data.h1Title);
-      setValue('content', data.content);
-
-      // Show success message
-      setError(''); // Clear any previous errors
+      const aiContent = data.content;
+      
+      console.log("Received AI content:", aiContent);
+      
+      // Extract different sections using more specific regex patterns
+      const metaTitleMatch = aiContent.match(/Meta Title:\s*(.*?)(?=\n\n|$)/);
+      const metaDescriptionMatch = aiContent.match(/Meta Description:\s*(.*?)(?=\n\n|$)/);
+      const h1Match = aiContent.match(/H1:\s*(.*?)(?=\n\n|$)/);
+      
+      // Clean up extracted text
+      const cleanText = (text: string | undefined) => {
+        if (!text) return '';
+        
+        // Remove all asterisks and character counts 
+        return text.trim()
+          .replace(/\*/g, '')  // Remove ALL asterisks anywhere in the text
+          .replace(/\s*\(\d+\s*characters?\)\s*$/, '')  // Remove character counts
+          .trim();
+      };
+      
+      // Extract content section which should contain HTML
+      let bodyContent = '';
+      const contentSectionIndex = aiContent.indexOf('Content:');
+      
+      if (contentSectionIndex !== -1) {
+        // Get everything after "Content:" label
+        bodyContent = aiContent.substring(contentSectionIndex + 'Content:'.length).trim();
+        
+        console.log("Raw body content:", bodyContent);
+        
+        // Make sure content is properly formatted HTML
+        if (!bodyContent.includes('<h2>') && !bodyContent.includes('<p>')) {
+          console.log("Content doesn't appear to have proper HTML formatting, adding default structure");
+          bodyContent = `
+            <h2>Welcome to ${pageType === 'state' ? selectedState : selectedCity}</h2>
+            <p>${bodyContent}</p>
+            <h2>Discover Local Connections</h2>
+            <p>Find companionship and connections in ${pageType === 'state' ? selectedState : selectedCity}.</p>
+            <ul>
+              <li>Browse local listings</li>
+              <li>Connect with companions</li>
+              <li>Explore available services</li>
+            </ul>
+          `;
+        }
+        
+        // Ensure the content has a wrapper element if needed
+        if (!bodyContent.startsWith('<')) {
+          bodyContent = `<div>${bodyContent}</div>`;
+        }
+        
+        console.log("Final formatted content:", bodyContent);
+      } else {
+        // Fallback content if we can't extract it
+        console.log("Using fallback content - couldn't find Content: section");
+        bodyContent = `
+          <h2>Discover ${pageType === 'state' ? selectedState : selectedCity}</h2>
+          <p>Welcome to our guide to ${pageType === 'state' ? selectedState : selectedCity} escorts and companions.</p>
+          <h2>Find Local Connections</h2>
+          <p>Browse through our extensive listings to find the perfect companion in ${pageType === 'state' ? selectedState : selectedCity}.</p>
+          <h3>Why Choose Our Platform</h3>
+          <p>We offer a convenient way to connect with escorts in your area.</p>
+          <ul>
+            <li>Easy to use listings</li>
+            <li>Comprehensive information</li>
+            <li>Regular updates</li>
+          </ul>
+        `;
+      }
+      
+      // Set values in the form
+      setValue('title', cleanText(metaTitleMatch ? metaTitleMatch[1] : ''));
+      setValue('metaDescription', cleanText(metaDescriptionMatch ? metaDescriptionMatch[1] : ''));
+      setValue('h1Title', cleanText(h1Match ? h1Match[1] : ''));
+      
+      // Set content directly
+      console.log("Setting content value to editor:", bodyContent.substring(0, 100) + "...");
+      setValue('content', bodyContent);
     } catch (err) {
-      console.error('Error generating content:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate content. Please try again later.');
+      setError('Failed to generate content. Please try again.');
+      console.error(err);
     } finally {
       setIsGenerating(false);
     }
@@ -144,18 +195,15 @@ export default function AddLocationPage() {
       setIsSubmitting(true);
       setError('');
 
-      // Validate that city is provided if type is 'city'
       if (data.type === 'city' && (!data.city || data.city.trim() === '')) {
         setError('City is required for city pages');
         setIsSubmitting(false);
         return;
       }
 
-      // Create a URL-friendly slug for the state and city
       const stateSlug = data.state.toLowerCase().replace(/\s+/g, '-');
       const citySlug = data.city ? data.city.toLowerCase().replace(/\s+/g, '-') : '';
 
-      // Create the location page document
       const locationPageData = {
         type: data.type,
         state: data.state,
@@ -173,10 +221,8 @@ export default function AddLocationPage() {
         updatedAt: new Date().toISOString(),
       };
 
-      // Add the document to Firestore
       await addDoc(collection(db, 'locationPages'), locationPageData);
 
-      // Redirect to the location pages list
       router.push('/dashboard/location-pages');
     } catch (err) {
       console.error('Error creating location page:', err);
@@ -282,36 +328,15 @@ export default function AddLocationPage() {
             )}
           </div>
           
-          {/* Generate with AI button */}
-          {(selectedState && (pageType === 'state' || (pageType === 'city' && selectedCity))) && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={generateWithAI}
-                disabled={isGenerating}
-                className="inline-flex items-center rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50"
-              >
-                {isGenerating ? (
-                  <>
-                    <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Generate with AI
-                  </>
-                )}
-              </button>
-              <p className="mt-1 text-xs text-gray-500">
-                Generate SEO-optimized content for this {pageType} page using AI
-              </p>
-            </div>
+          {((pageType === 'state' && selectedState) || (pageType === 'city' && selectedState && selectedCity)) && (
+            <button
+              type="button"
+              onClick={handleGenerateAI}
+              disabled={isGenerating}
+              className="mt-4 rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              {isGenerating ? 'Generating...' : 'Generate with AI'}
+            </button>
           )}
         </div>
 

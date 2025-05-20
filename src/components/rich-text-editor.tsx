@@ -10,7 +10,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 
 interface RichTextEditorProps {
   content: string;
@@ -78,7 +78,19 @@ const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
         class: 'prose max-w-none focus:outline-none',
       },
     },
+    immediatelyRender: false,
   });
+
+  // Add useEffect to update content when it changes externally
+  useEffect(() => {
+    if (editor && content) {
+      // Only update if the content is different to avoid loops
+      if (editor.getHTML() !== content) {
+        console.log("Updating editor content from props:", content.substring(0, 50) + "...");
+        editor.commands.setContent(content, false);
+      }
+    }
+  }, [editor, content]);
 
   // Define all callbacks with useCallback to maintain consistent hook order
   const toggleBold = useCallback(() => {
