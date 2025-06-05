@@ -96,6 +96,18 @@ export default function DashboardLayout({
                 active={pathname?.startsWith('/dashboard/location-pages')}
               />
               <NavItem
+                href="/dashboard/blog-posts"
+                icon="📝"
+                label="Blog Posts"
+                active={pathname?.startsWith('/dashboard/blog-posts')}
+              />
+              <NavItem
+                href="/dashboard/pages"
+                icon="📄"
+                label="Pages"
+                active={pathname?.startsWith('/dashboard/pages')}
+              />
+              <NavItem
                 href="/dashboard/reports"
                 icon="📈"
                 label="Reports"

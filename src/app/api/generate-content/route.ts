@@ -26,64 +26,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing state or city' }, { status: 400 });
     }
 
-    const systemPrompt = `Objective: Generate SEO-optimized content for SKLUVA.com (United States Escorts Classifieds). Adhere strictly to all instructions outlined below for consistent and effective content creation.
+    const systemPrompt = `Objective: Generate SEO-optimized content for SKLUVA.com (United States Escorts Classifieds).
 
-CRITICAL: Format your response precisely as follows - do not use asterisks, markdown, or special characters:
+CRITICAL FORMATTING INSTRUCTIONS: 
+- DO NOT USE ASTERISKS (*) ANYWHERE IN YOUR RESPONSE
+- DO NOT INCLUDE CHARACTER COUNTS
+- DO NOT USE MARKDOWN FORMATTING
+- DO NOT WRAP TEXT IN ANY SPECIAL CHARACTERS
+- FORMAT ONLY WITH HTML TAGS AS SPECIFIED BELOW
 
-Meta Title: [title here]
+Your response must follow this EXACT structure:
 
-Meta Description: [description here]
+Meta Title: [Plain text title, max 50 characters]
 
-H1: [h1 title here]
+Meta Description: [Plain text description, 130-140 characters exactly]
 
-Content:
-<h1>[h1 title here]</h1>
-<p>[First paragraph]</p>
-<h2>[First subheading]</h2>
-<p>[Paragraph under first subheading]</p>
-<h2>[Second subheading]</h2>
-<p>[Paragraph under second subheading]</p>
-<h2>[Third subheading]</h2>
-<p>[Paragraph under third subheading]</p>
-<h2>Key Benefits</h2>
-<ul>
-<li>[First bullet point]</li>
-<li>[Second bullet point]</li>
-<li>[Third bullet point]</li>
-<li>[Fourth bullet point]</li>
-</ul>
-
-CRITICAL: The content must begin with the H1 heading. Do NOT include any introductory paragraphs or text before the H1 heading. Always start the actual content with the H1.
-
-STATE PAGE RULES (MUST FOLLOW EXACTLY):
-1. H1 format MUST be: "[State Name] Escorts – [Engaging Tagline Related to Discovery/Connections Statewide]"
-2. Paragraphs must be SHORT (2-4 sentences maximum)
-3. The last section MUST be formatted as bullet points (not paragraph text)
-4. Each paragraph must not mention "escort" or "escorts" more than TWICE
-5. Include at least THREE distinct call-to-actions in the content
-
-EXAMPLE STATE PAGE FORMAT:
-Meta Title: Florida Escorts - Find Companions Statewide
-
-Meta Description: Browse Florida Independent Escorts on SKLUVA. Discover verified listings and genuine connections across the Sunshine State.
-
-H1: Florida Escorts – Discover Genuine Connections Statewide
+H1: [Plain text H1 heading]
 
 Content:
-<h1>Florida Escorts – Discover Genuine Connections Statewide</h1>
-<p>Florida offers an exciting blend of beaches, nightlife, and cultural attractions. Whether you're visiting Miami's vibrant scene or relaxing in Key West, finding companionship enhances the experience. Browse verified listings to discover your perfect match.</p>
-<h2>Finding Companions in Florida</h2>
-<p>SKLUVA's platform connects you with independent escorts throughout Florida. Our user-friendly interface makes it simple to view profiles and find companions who match your preferences. Explore listings today to make your Florida experience memorable.</p>
-<h2>Popular Florida Destinations</h2>
-<p>From Orlando's entertainment districts to Tampa's scenic waterfront, Florida offers diverse destinations for every taste. Connect with companions familiar with local hotspots who can enhance your visit. View profiles now to find someone who shares your interests.</p>
-<h2>Your Florida Experience</h2>
-<p>Making meaningful connections in Florida becomes effortless with SKLUVA's classifieds. The platform features detailed profiles to help you find exactly what you're looking for. Discover connections and create unforgettable memories across the Sunshine State.</p>
-<h2>Why Choose SKLUVA in Florida</h2>
+<h2>First Subheading Here</h2>
+<p>First paragraph of content here. Each paragraph must be properly wrapped in p tags.</p>
+<p>Second paragraph here with more information about the topic.</p>
+<h2>Second Subheading Here</h2>
+<p>More content about this topic with important information.</p>
+<h3>A  subheading</h3>
+<p>Further details and information for the reader.</p>
+<h2>Third Subheading Here</h2>
+<p>.</p>
+<p></p>
+<h2>Fourth Subheading Here</h2>
+<p></p>
+<p>CTA</p>
 <ul>
-<li>Browse comprehensive listings covering all major Florida cities</li>
-<li>Connect directly with independent companions</li>
-<li>Find matches based on specific preferences and interests</li>
-<li>Discover local experiences enhanced by knowledgeable companions</li>
+<li>First important point or benefit</li>
+<li>Second important point or next step</li>
+<li>Third important point or feature</li>
 </ul>
 
 I. COMMAND STRUCTURE (How to Request Content):
@@ -94,49 +71,75 @@ For City Pages: Use the command: Generate a City page for [City Name], [State Na
 
 II. UNIVERSAL OUTPUT REQUIREMENTS (Applicable to ALL Pages):
 
+IMPORTANT: STRUCTURE YOUR RESPONSE EXACTLY AS FOLLOWS:
+
+Meta Title: [Title here, max 50 characters - DO NOT include ** or character counts]
+
+Meta Description: [Description here, 130-140 characters exactly - DO NOT include ** or character counts]
+
+H1: [H1 title here - DO NOT include ** or character counts]
+
+Content:
+[All body content goes here, properly formatted with HTML tags]
+
 A. Meta Title:
 
 Maximum Length: 50 characters.
 
-Content (State Page): Must include [State Name] Escorts.
-
-Content (City Page): Must include [City Name] Escorts.
-
-Keyword Usage: Use the primary keyword (e.g., "Texas Escorts" or "Miami Escorts") only ONCE.
-
-Style: Keep it concise and highly relevant to the page's geographical focus.
+Content Requirements:
+- MUST be completely unique for each generation
+- MUST include either "[State/City] Escorts" OR "[State/City] Independent Escorts" (use exactly ONE of these two keyword phrases)
+- MUST include a unique and creative tagline that relates to the location
+- Never reuse taglines or phrases from previous outputs
+- Avoid generic phrases like "find companionship" or "discover connections"
+- Avoid the word "championship" and similar overused terms
 
 B. Meta Description:
 
-Maximum Length: 140 characters.
+Length Requirement: MUST be between 130-140 characters (not less, not more).
 
-Content (State Page): Must include [State Name] Independent Escorts.
+Content Requirements:
+- MUST be completely unique for each generation
+- MUST include "[State/City] Independent Escorts" exactly once
+- MUST be engaging and provide specific information about the location or service
+- NEVER include "SKLUVA" or "SKLUVA.com" in the meta description
+- STRICTLY NEVER include "SKLUVA" or "SKLUVA.com" in WHOLE CONTENT MORE THAN 1 TIME
+- Never reuse phrases from previous outputs
+- Avoid generic descriptions
 
-Content (City Page): Must include [City Name] Independent Escorts.
-
-Keyword Usage: Use the primary keyword (e.g., "Texas Independent Escorts" or "Miami Independent Escorts") only ONCE.
-
-Style: Engaging and informative, encouraging clicks.
-
-C. SEO Body Content:
+C. SEO Body Content (MUST BE PROPERLY FORMATTED WITH HTML TAGS):
 
 Minimum Word Count: 200+ words.
 
-H1 Heading:Structure (State Page): [State Name] Escorts – [Engaging Tagline Related to Discovery/Connections Statewide]Example: Nevada Escorts – Discover Companionship Statewide
-
-Structure (City Page): [City Name] Escorts – [Engaging Tagline Related to City-Specific Connections/Experiences]Example: Atlanta Escorts – Experience the City's Finest Connections
+H1 Heading: Structure (State Page): [State Name] Escorts – [Engaging Tagline Related to Discovery/Connections Statewide]Example: Nevada Escorts – Discover Companionship Statewide Structure (City Page): [City Name] Escorts – [Engaging Tagline Related to City-Specific Connections/Experiences]Example: Atlanta Escorts – Experience the City's Finest Connections
 
 Exact Phrase Requirement: Must include the exact phrase [State Name] Escorts or [City Name] Escorts.
 
-Formatting & Structure:Subheadings: Use H2 or H3 headings to create a clear and logical structure.
+Formatting & Structure: Use proper HTML tags as follows:
+- Use <h2> and <h3> tags for subheadings
+- Use <p> tags for paragraphs
+- Use <ul> and <li> tags for bullet points
+- The last section MUST be formatted as a <ul> with <li> bullet points
 
-Paragraphs: Keep paragraphs short (2-6 sentences) for better readability). Each paragraph must not exceed four lines of text.
+Paragraphs: Keep paragraphs short (2-6 sentences) for better readability. Each paragraph must not exceed four lines of text.
 
 Voice: Use active voice consistently.
 
 Readability: Format for optimal mobile readability (e.g., good spacing, concise sentences).
 
-Bold Text: Use bold text only for H1, H2, and H3 headings. Do not use bold text within paragraphs.
+Bold Text: Dont use bold text OR Bold Words body content.
+
+SKLUVA's Role: VERY STRICTLY NEVER state or imply that SKLUVA.com owns, manages, operates, verifies, or endorses any listings or individuals. The platform is a classifieds site.
+
+Anti-Repetition Rules:
+- Never use the same phrase or sentence structure more than once
+- Vary your vocabulary throughout the content
+- Use different subheading styles and formats
+- Ensure each paragraph has a distinct focus and content
+- Each bullet point should be unique with no repetitive structure
+- STRICTLY Maximum mentions of "SKLUVA.com" is 1 TIME in the entire content
+- Avoid repetitive calls-to-action; make each CTA unique
+- Use synonyms and alternative phrasing instead of repeating terms
 
 General Keyword "Escort(s)" Usage Rules:Per Paragraph: The word "escort" or "escorts" must not appear more than TWO (2) times in any single paragraph.
 
@@ -184,7 +187,7 @@ CRITICAL: If any rule outlined in this Master Prompt is broken (e.g., character/
 
 V. STRICT LAST PARAGRAPH INSTRUCTION:
 
-CRITICAL: The very last section of the generated output, which would typically be the final paragraph, MUST be formatted as a list of bullet points. It must NOT be a continuous paragraph. These bullet points should summarize key benefits or next steps for the user.`;
+CRITICAL: The very last section of the generated output, which would typically be the final paragraph, MUST be formatted as a list of bullet points using <ul> and <li> tags. It must NOT be a continuous paragraph. These bullet points should summarize key benefits or next steps for the user.`;
 
     try {
       console.log("Attempting to use Groq API...");
@@ -193,9 +196,9 @@ CRITICAL: The very last section of the generated output, which would typically b
           { role: 'system', content: systemPrompt },
           { role: 'user', content: command },
         ],
-        model: 'llama3-70b-8192',
-        temperature: 0.3, // Reduced from 0.5 for exact adherence to formatting
-        max_tokens: 1500, // Increased to ensure enough content
+        model: 'meta-llama/llama-4-maverick-17b-128e-instruct', // Use a valid model name
+        temperature: 0.7,
+        max_tokens: 1024,
         top_p: 1,
         stream: false,
       });

@@ -327,17 +327,6 @@ export default function AddLocationPage() {
               </div>
             )}
           </div>
-          
-          {((pageType === 'state' && selectedState) || (pageType === 'city' && selectedState && selectedCity)) && (
-            <button
-              type="button"
-              onClick={handleGenerateAI}
-              disabled={isGenerating}
-              className="mt-4 rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              {isGenerating ? 'Generating...' : 'Generate with AI'}
-            </button>
-          )}
         </div>
 
         <div className="rounded-md bg-white p-6 shadow">
