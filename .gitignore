@@ -12,9 +12,9 @@
 
 # testing
 /coverage
-
-/.env
-/.env.local
+# The following lines ensure that environment files are ignored, which is important for security and preventing sensitive information from being exposed.
+.env
+.env.local
 # next.js
 /.next/
 /out/
