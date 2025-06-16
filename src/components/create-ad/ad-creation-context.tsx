@@ -1,7 +1,6 @@
 "use client"
 
-import React from "react"
-import { createContext, useContext, useReducer } from "react"
+import React, { createContext, useContext, useReducer } from "react"
 
 // Define types for our state
 export type AdFormData = {
@@ -39,6 +38,13 @@ export type AdFormData = {
 type AdCreationAction =
   | { type: "SET_STEP"; payload: number }
   | { type: "SET_AD_TYPE"; payload: string }
+  | { type: "SET_TITLE"; payload: string }
+  | { type: "SET_DESCRIPTION"; payload: string }
+  | { type: "SET_STATE"; payload: string }
+  | { type: "SET_CITY"; payload: string }
+  | { type: "SET_SERVICES"; payload: string[] }
+  | { type: "SET_CATERS_TO"; payload: string[] }
+  | { type: "SET_PLACE_OF_SERVICE"; payload: string[] }
   | { type: "UPDATE_FORM"; payload: Partial<AdFormData> }
   | { type: "ADD_PHOTO"; payload: string }
   | { type: "REMOVE_PHOTO"; payload: number }
@@ -47,7 +53,7 @@ type AdCreationAction =
       payload: {
         field: keyof Pick<
           AdFormData,
-          "ethnicity" | "bodyType" | "breastType" | "hairColor" | "services" | "catersTo" | "placeOfService"
+          "ethnicity" | "bodyType" | "breastType" | "hairColor" | "services" | "catersTo" | "placeOfService" | "nationality"
         >
         value: string
       }
@@ -56,7 +62,7 @@ type AdCreationAction =
   | { type: "INITIALIZE_EDIT"; payload: { initialAd: any; adId: string } }
 
 const initialState: AdFormData = {
-  step: 0, // 0 = ad type selection, 1-3 = form steps
+  step: 0,
   adType: null,
   name: "",
   category: "Escort",
@@ -112,6 +118,20 @@ function adCreationReducer(state: AdFormData, action: AdCreationAction): AdFormD
       return { ...state, step: action.payload }
     case "SET_AD_TYPE":
       return { ...state, adType: action.payload }
+    case "SET_TITLE":
+      return { ...state, title: action.payload }
+    case "SET_DESCRIPTION":
+      return { ...state, description: action.payload }
+    case "SET_STATE":
+      return { ...state, state: action.payload }
+    case "SET_CITY":
+      return { ...state, city: action.payload }
+    case "SET_SERVICES":
+      return { ...state, services: action.payload }
+    case "SET_CATERS_TO":
+      return { ...state, catersTo: action.payload }
+    case "SET_PLACE_OF_SERVICE":
+      return { ...state, placeOfService: action.payload }
     case "UPDATE_FORM":
       return { ...state, ...action.payload }
     case "ADD_PHOTO":
@@ -140,7 +160,7 @@ function adCreationReducer(state: AdFormData, action: AdCreationAction): AdFormD
       const { initialAd, adId } = action.payload
       return {
         ...state,
-        step: 1, // Start at step 1 for edit mode
+        step: 1,
         isEditMode: true,
         adId: adId,
         adType: initialAd.adType || "free",
@@ -167,7 +187,7 @@ function adCreationReducer(state: AdFormData, action: AdCreationAction): AdFormD
         incallRates: initialAd.incallRates || state.incallRates,
         outcallRates: initialAd.outcallRates || state.outcallRates,
         photos: initialAd.photos || [],
-        termsAccepted: true, // Assume accepted if editing existing ad
+        termsAccepted: true,
       }
     case "RESET_FORM":
       return initialState
@@ -193,7 +213,6 @@ interface AdCreationProviderProps {
 export function AdCreationProvider({ children, initialAd, isEditMode = false, adId }: AdCreationProviderProps) {
   const [state, dispatch] = useReducer(adCreationReducer, initialState)
 
-  // Initialize edit mode if provided
   React.useEffect(() => {
     if (isEditMode && initialAd && adId) {
       dispatch({ type: "INITIALIZE_EDIT", payload: { initialAd, adId } })

@@ -1,45 +1,82 @@
 "use client"
 
 import { useAdCreation } from "./ad-creation-context"
+import { Card } from "@/components/ui/card"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+
+const adTypes = [
+  {
+    id: "service",
+    title: "Service Provider",
+    description: "Offer your services to potential clients",
+  },
+  {
+    id: "job",
+    title: "Job Seeker",
+    description: "Find your next opportunity",
+  },
+  {
+    id: "business",
+    title: "Business",
+    description: "Promote your business or products",
+  },
+]
 
 export default function AdTypeSelection() {
-  const { dispatch } = useAdCreation()
+  const { state, dispatch } = useAdCreation()
 
-  const handleAdTypeSelect = (adType: string) => {
-    dispatch({ type: "SET_AD_TYPE", payload: adType })
-    dispatch({ type: "SET_STEP", payload: 1 })
+  const handleNext = () => {
+    if (state.adType) {
+      dispatch({ type: "SET_STEP", payload: 1 })
+    }
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <header className="bg-[#007bff] text-white py-6 w-full">
-        <div className="container mx-auto text-center">
-          <h1 className="text-4xl font-bold">Select Ad Type</h1>
-          <p className="mt-2 text-lg font-medium">Choose the type of advertisement</p>
+    <Card className="p-6">
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-semibold mb-2">Select Ad Type</h2>
+          <p className="text-gray-600">
+            Choose the type of advertisement you want to create
+          </p>
         </div>
-      </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div 
-            onClick={() => handleAdTypeSelect('free')}
-            className="bg-white rounded-xl shadow-md border border-gray-200 p-8 cursor-pointer hover:shadow-lg transition-shadow"
-          >
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Free Ad</h3>
-            <p className="text-gray-600 mb-4">Basic advertisement with standard features</p>
-            <div className="text-3xl font-bold text-green-600">Free</div>
-          </div>
+        <RadioGroup
+          value={state.adType}
+          onValueChange={(value) => dispatch({ type: "SET_AD_TYPE", payload: value })}
+          className="space-y-4"
+        >
+          {adTypes.map((type) => (
+            <div
+              key={type.id}
+              className="flex items-start space-x-3 p-4 border rounded-lg hover:border-primary cursor-pointer"
+            >
+              <RadioGroupItem value={type.id} id={type.id} />
+              <div className="flex-1">
+                <Label
+                  htmlFor={type.id}
+                  className="text-lg font-medium cursor-pointer"
+                >
+                  {type.title}
+                </Label>
+                <p className="text-gray-600 mt-1">{type.description}</p>
+              </div>
+            </div>
+          ))}
+        </RadioGroup>
 
-          <div 
-            onClick={() => handleAdTypeSelect('premium')}
-            className="bg-white rounded-xl shadow-md border border-gray-200 p-8 cursor-pointer hover:shadow-lg transition-shadow"
+        <div className="flex justify-end">
+          <Button
+            onClick={handleNext}
+            disabled={!state.adType}
+            className="w-full sm:w-auto"
           >
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Premium Ad</h3>
-            <p className="text-gray-600 mb-4">Enhanced advertisement with premium features</p>
-            <div className="text-3xl font-bold text-blue-600">$12.95</div>
-          </div>
+            Continue
+          </Button>
         </div>
       </div>
-    </div>
+    </Card>
   )
 } 

@@ -11,6 +11,11 @@
   "dependencies": {
     "@headlessui/react": "^2.2.4",
     "@hookform/resolvers": "^5.0.1",
+    "@radix-ui/react-checkbox": "^1.3.2",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-radio-group": "^1.3.7",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-switch": "^1.2.5",
     "@tiptap/extension-bold": "^2.12.0",
     "@tiptap/extension-bullet-list": "^2.12.0",
     "@tiptap/extension-heading": "^2.12.0",
@@ -28,6 +33,8 @@
     "@tiptap/extension-underline": "^2.12.0",
     "@tiptap/react": "^2.12.0",
     "@tiptap/starter-kit": "^2.12.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "firebase": "^11.7.3",
     "groq-sdk": "^0.21.0",
     "lucide-react": "^0.511.0",
@@ -37,6 +44,8 @@
     "react-hook-form": "^7.56.4",
     "react-hot-toast": "^2.5.2",
     "recharts": "^2.15.3",
+    "swiper": "^11.2.8",
+    "tailwind-merge": "^3.3.1",
     "zod": "^3.24.4"
   },
   "devDependencies": {

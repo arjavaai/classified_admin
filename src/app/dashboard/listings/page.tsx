@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, updateDoc, query, where, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { usaStatesAndCitiesData } from '@/lib/demo-data';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Pagination, Autoplay } from 'swiper/modules';
+import './swiper-styles.css';
+import Link from 'next/link';
 
 interface Listing {
   id: string;
@@ -11,9 +16,16 @@ interface Listing {
   state: string;
   city: string;
   status: 'active' | 'pending' | 'rejected';
-  createdAt: string;
-  updatedAt: string;
+  createdAt: any;
+  updatedAt: any;
   userId: string;
+  adType: 'free' | 'premium';
+  description: string;
+  photos: string[];
+  category: string;
+  age: string;
+  boosted?: boolean;
+  promotedAt?: string;
 }
 
 export default function ListingsPage() {
@@ -23,6 +35,23 @@ export default function ListingsPage() {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [stateFilter, setStateFilter] = useState<string>('all');
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchedAd, setSearchedAd] = useState<Listing | null>(null);
+
+  // Get states list
+  const statesList = usaStatesAndCitiesData.states.map(state => ({
+    name: state.name,
+    abbreviation: state.abbreviation
+  }));
+
+  // Get cities for selected state
+  const citiesList = selectedState 
+    ? usaStatesAndCitiesData.states
+        .find(state => state.abbreviation === selectedState)
+        ?.cities || []
+    : [];
 
   useEffect(() => {
     const fetchListings = async () => {
@@ -86,6 +115,206 @@ export default function ListingsPage() {
   // Get unique states for filter
   const states = Array.from(new Set(listings.map(listing => listing.state))).sort();
 
+  // Get state name from abbreviation
+  const getStateNameFromAbbreviation = (abbreviation: string): string => {
+    const state = usaStatesAndCitiesData.states.find(
+      state => state.abbreviation.toLowerCase() === abbreviation.toLowerCase()
+    );
+    return state ? state.name : abbreviation;
+  };
+
+  // Get city name from slug
+  const getCityNameFromSlug = (stateAbbr: string, citySlug: string): string => {
+    const state = usaStatesAndCitiesData.states.find(
+      state => state.abbreviation.toLowerCase() === stateAbbr.toLowerCase()
+    );
+    if (!state) return citySlug;
+    
+    const city = state.cities.find(
+      city => city.slug.toLowerCase() === citySlug.toLowerCase()
+    );
+    return city ? city.name : citySlug;
+  };
+
+  // Fetch ads based on state and city
+  const fetchAds = async () => {
+    if (!selectedState) return;
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      // Convert state abbreviation to full name
+      const stateName = getStateNameFromAbbreviation(selectedState);
+      let cityName = '';
+      
+      if (selectedCity) {
+        cityName = getCityNameFromSlug(selectedState, selectedCity);
+      }
+      
+      console.log(`Fetching ads for state: ${stateName}${cityName ? `, city: ${cityName}` : ''}`);
+      
+      let q = query(collection(db, 'ads'));
+      
+      // Add state filter
+      if (stateName) {
+        q = query(q, where('state', '==', stateName));
+      }
+      
+      // Add city filter if selected
+      if (cityName) {
+        q = query(q, where('city', '==', cityName));
+      }
+      
+      const snapshot = await getDocs(q);
+      console.log(`Found ${snapshot.docs.length} ads`);
+      
+      const ads = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title || 'Untitled Ad',
+          state: data.state || '',
+          city: data.city || '',
+          status: data.status || 'pending',
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          userId: data.userId || '',
+          adType: data.adType || 'free',
+          description: data.description || '',
+          photos: data.photos || [],
+          category: data.category || '',
+          age: data.age || '',
+          boosted: data.boosted,
+          promotedAt: data.promotedAt
+        } as Listing;
+      });
+      
+      // Sort ads: premium first, then by creation date (newest first)
+      ads.sort((a, b) => {
+        // Premium ads first
+        if (a.adType === 'premium' && b.adType !== 'premium') return -1;
+        if (a.adType !== 'premium' && b.adType === 'premium') return 1;
+        
+        // Then by creation date (newest first)
+        const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt?.seconds * 1000 || 0);
+        const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt?.seconds * 1000 || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setListings(ads);
+    } catch (err) {
+      setError('Failed to fetch ads');
+      console.error('Error fetching ads:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Reset city when state changes
+  useEffect(() => {
+    setSelectedCity('');
+  }, [selectedState]);
+
+  // Add ImageCarousel component
+  function ImageCarousel({ images, photoCount }: { images: string[], photoCount: number }) {
+    const allImages = images.length > 0 ? images : ['/placeholder.svg'];
+    
+    return (
+      <div className="relative listing-image-carousel-fixed">
+        <div style={{
+          width: '170px',
+          height: '100%',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <Swiper
+            modules={[Pagination, Autoplay]}
+            spaceBetween={0}
+            slidesPerView={1}
+            pagination={{
+              clickable: true,
+            }}
+            autoplay={{
+              delay: 3000,
+              disableOnInteraction: false,
+              pauseOnMouseEnter: true,
+            }}
+            loop={allImages.length > 1}
+            className="h-full w-full"
+            style={{ width: '170px', height: '100%' }}
+            grabCursor={true}
+            simulateTouch={true}
+            touchEventsTarget="container"
+          >
+            {allImages.map((image, index) => (
+              <SwiperSlide key={index}>
+                <img
+                  src={image}
+                  alt="Listing image"
+                  className="w-full h-full object-cover"
+                  style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+                />
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        </div>
+        <div className="absolute bottom-2 left-2 bg-white px-2 py-1 rounded text-xs flex items-center gap-1 shadow-sm">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-3 h-3"
+          >
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+            <circle cx="12" cy="13" r="3" />
+          </svg>
+          {photoCount}
+        </div>
+      </div>
+    );
+  }
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    
+    try {
+      const docRef = doc(db, 'ads', searchQuery);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setSearchedAd({
+          id: docSnap.id,
+          title: data.title || 'Untitled Ad',
+          state: data.state || '',
+          city: data.city || '',
+          status: data.status || 'pending',
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          userId: data.userId || '',
+          adType: data.adType || 'free',
+          description: data.description || '',
+          photos: data.photos || [],
+          category: data.category || '',
+          age: data.age || '',
+          boosted: data.boosted,
+          promotedAt: data.promotedAt
+        });
+      } else {
+        setSearchedAd(null);
+      }
+    } catch (error) {
+      console.error('Error fetching ad:', error);
+      setSearchedAd(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -99,11 +328,36 @@ export default function ListingsPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Escort Listings Management</h1>
         <button
-          onClick={() => router.push('/dashboard/listings/add')}
-          className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          onClick={() => router.push('/dashboard/listings/create')}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
-          Add New Listing
+          Create New Listing
         </button>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <form onSubmit={handleSearch}>
+          <label htmlFor="search" className="block text-sm font-medium text-gray-700">
+            Search by Ad ID
+          </label>
+          <div className="mt-1 flex gap-2">
+            <input
+              type="text"
+              id="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Enter Ad ID..."
+              className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Search
+            </button>
+          </div>
+        </form>
       </div>
 
       {error && (
@@ -146,7 +400,82 @@ export default function ListingsPage() {
             ))}
           </select>
         </div>
+
+        {/* State Dropdown */}
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            State
+          </label>
+          <select
+            className="w-full border border-gray-300 rounded-md p-2"
+            value={selectedState}
+            onChange={(e) => setSelectedState(e.target.value)}
+          >
+            <option value="">All States</option>
+            {statesList.map((state) => (
+              <option key={state.abbreviation} value={state.abbreviation}>
+                {state.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* City Dropdown */}
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            City
+          </label>
+          <select
+            className="w-full border border-gray-300 rounded-md p-2"
+            value={selectedCity}
+            onChange={(e) => setSelectedCity(e.target.value)}
+            disabled={!selectedState}
+          >
+            <option value="">All Cities</option>
+            {citiesList.map((city) => (
+              <option key={city.slug} value={city.slug}>
+                {city.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Fetch Ads Button */}
+        <div className="flex items-end">
+          <button
+            onClick={fetchAds}
+            disabled={!selectedState || isLoading}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isLoading ? 'Loading...' : 'Fetch Ads'}
+          </button>
+        </div>
       </div>
+
+      {/* Searched Ad */}
+      {searchedAd && (
+        <div className="mb-8">
+          <h2 className="mb-4 text-lg font-medium text-gray-900">Searched Ad</h2>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-row hover:shadow-md transition-shadow h-[253px] sm:h-[242px] md:h-[242px] relative">
+              <ImageCarousel 
+                images={searchedAd.photos || []} 
+                photoCount={searchedAd.photos?.length || 0}
+              />
+              <div className="p-3 sm:p-5 flex-1 flex flex-col justify-between">
+                <div>
+                  <div className="text-black font-bold text-sm sm:text-base mb-1 sm:mb-2 line-clamp-3 leading-tight">{searchedAd.title}</div>
+                  <p className="text-gray-700 text-xs sm:text-sm mb-2 sm:mb-3 line-clamp-2 leading-tight sm:leading-normal">{searchedAd.description}</p>
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>{searchedAd.city}, {searchedAd.state}</span>
+                  <span>{new Date(searchedAd.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-center">Loading listings...</div>
@@ -155,104 +484,61 @@ export default function ListingsPage() {
           No listings found.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Title
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Location
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Created At
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {filteredListings.map((listing) => (
-                <tr key={listing.id}>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                    {listing.title}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {listing.city}, {listing.state}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm">
-                    <span
-                      className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                        listing.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : listing.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {filteredListings.map((listing) => (
+            (
+              <div
+                key={listing.id}
+                className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-row hover:shadow-md transition-shadow"
+                style={{ minHeight: '170px', height: '170px' }}
+              >
+                <ImageCarousel
+                  images={listing.photos || []}
+                  photoCount={listing.photos?.length || 0}
+                />
+                <div className="flex flex-col justify-between flex-1 p-2 h-full">
+                  {/* Top badges and title */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-bold text-xs line-clamp-2 leading-tight" style={{ maxWidth: '100px' }}>{listing.title}</div>
+                      <div className="flex flex-col items-end gap-1 min-w-[50px]">
+                        {listing.boosted && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 whitespace-nowrap">👑 TOP</span>
+                        )}
+                        {!listing.boosted && listing.adType === 'premium' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 whitespace-nowrap">Premium</span>
+                        )}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap ${listing.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}</span>
+                      </div>
+                    </div>
+                    <p className="text-gray-700 text-xs mb-1 line-clamp-2 leading-tight" style={{ minHeight: '18px' }}>{listing.description}</p>
+                  </div>
+                  {/* Location and date */}
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                    <span>{listing.city}, {listing.state}</span>
+                    <span>{listing.createdAt ? new Date(listing.createdAt).toLocaleDateString() : 'Invalid Date'}</span>
+                  </div>
+                  {/* Buttons */}
+                  <div className="flex items-center gap-2 mt-auto">
+                    <Link
+                      href={`/dashboard/listings/edit/${listing.id}`}
+                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      style={{ minWidth: '50px', justifyContent: 'center' }}
                     >
-                      {listing.status}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {new Date(listing.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => router.push(`/dashboard/listings/${listing.id}`)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        View
-                      </button>
-                      <button
-                        onClick={() => router.push(`/dashboard/listings/edit/${listing.id}`)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteListing(listing.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    <div className="mt-2 flex space-x-2">
-                      {listing.status !== 'active' && (
-                        <button
-                          onClick={() => handleUpdateStatus(listing.id, 'active')}
-                          className="text-xs text-green-600 hover:text-green-900"
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {listing.status !== 'pending' && (
-                        <button
-                          onClick={() => handleUpdateStatus(listing.id, 'pending')}
-                          className="text-xs text-yellow-600 hover:text-yellow-900"
-                        >
-                          Pending
-                        </button>
-                      )}
-                      {listing.status !== 'rejected' && (
-                        <button
-                          onClick={() => handleUpdateStatus(listing.id, 'rejected')}
-                          className="text-xs text-red-600 hover:text-red-900"
-                        >
-                          Reject
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => handleDeleteListing(listing.id)}
+                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      style={{ minWidth: '50px', justifyContent: 'center' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          ))}
         </div>
       )}
     </div>
