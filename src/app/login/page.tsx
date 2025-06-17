@@ -23,6 +23,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -46,10 +47,40 @@ export default function LoginPage() {
     }
   };
 
+  const fillCredentials = (email: string, password: string) => {
+    setValue('email', email);
+    setValue('password', password);
+  };
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
         <h1 className="mb-6 text-center text-2xl font-bold">Admin Panel Login</h1>
+        
+        {/* Predefined Accounts */}
+        <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <h3 className="font-medium text-gray-900 mb-3">Available Accounts</h3>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => fillCredentials('skluva.com@gmail.com', 'SuperAdmin123!')}
+              className="w-full text-left text-sm bg-blue-100 hover:bg-blue-200 p-3 rounded transition-colors"
+            >
+              <div className="font-medium text-blue-900">🔑 Super Admin</div>
+              <div className="text-blue-700 text-xs">skluva.com@gmail.com</div>
+              <div className="text-blue-600 text-xs">Can create ads without payment</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => fillCredentials('admin@skluva.com', 'Admin123!')}
+              className="w-full text-left text-sm bg-gray-100 hover:bg-gray-200 p-3 rounded transition-colors"
+            >
+              <div className="font-medium text-gray-900">👤 Regular Admin</div>
+              <div className="text-gray-700 text-xs">admin@skluva.com</div>
+              <div className="text-gray-600 text-xs">Standard admin access</div>
+            </button>
+          </div>
+        </div>
         
         {error && (
           <div className="mb-4 rounded-md bg-red-50 p-4 text-sm text-red-500">
@@ -67,6 +98,7 @@ export default function LoginPage() {
               type="email"
               {...register('email')}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+              placeholder="Enter your email"
             />
             {errors.email && (
               <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
@@ -82,6 +114,7 @@ export default function LoginPage() {
               type="password"
               {...register('password')}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+              placeholder="Enter your password"
             />
             {errors.password && (
               <p className="mt-1 text-sm text-red-500">{errors.password.message}</p>

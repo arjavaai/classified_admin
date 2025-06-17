@@ -26,7 +26,7 @@ function AdFormContent({ disableForm }: { disableForm?: boolean }) {
   const { state, dispatch } = useAdCreation()
   const { step } = state
   
-  // Check if coming from promote-ad page
+  // Check if coming from promote-ad page or edit mode
   useEffect(() => {
     if (state.isEditMode) {
       // Skip to step 1 for edit mode
@@ -44,6 +44,7 @@ function AdFormContent({ disableForm }: { disableForm?: boolean }) {
       // Clear the localStorage item to prevent this from happening on refresh
       localStorage.removeItem('promotedAdType')
     }
+    // For admin creation, start from step 0 (ad type selection) - no longer skip
   }, [dispatch, state.isEditMode])
 
   return (

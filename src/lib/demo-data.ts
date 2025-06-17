@@ -706,7 +706,7 @@ export const usaStatesAndCitiesData = {
       { "name": "Lakeland", "slug": "lakeland" },
       { "name": "Lakeside", "slug": "lakeside" },
       { "name": "Lakewood Ranch", "slug": "lakewood-ranch" },
-      { "name": "Land O’Lakes", "slug": "land-o-lakes" },
+      { "name": "Land O'Lakes", "slug": "land-o-lakes" },
       { "name": "Lauderdale Lakes", "slug": "lauderdale-lakes" },
       { "name": "Lauderhill", "slug": "lauderhill" },
       { "name": "Lealman", "slug": "lealman" },
@@ -800,7 +800,7 @@ export const usaStatesAndCitiesData = {
       { "name": "The Hammocks", "slug": "the-hammocks" },
       { "name": "The Villages", "slug": "the-villages" },
       { "name": "Titusville", "slug": "titusville" },
-      { "name": "Town ’n’ Country", "slug": "town-n-country" },
+      { "name": "Town 'n' Country", "slug": "town-n-country" },
       { "name": "University", "slug": "university" },
       { "name": "Valrico", "slug": "valrico" },
       { "name": "Venice", "slug": "venice" },
@@ -1016,7 +1016,7 @@ export const usaStatesAndCitiesData = {
       { "name": "Normal", "slug": "normal" },
       { "name": "North Chicago", "slug": "north-chicago" },
       { "name": "Northbrook", "slug": "northbrook" },
-      { "name": "O’Fallon", "slug": "ofallon" },
+      { "name": "O'Fallon", "slug": "ofallon" },
       { "name": "Oak Forest", "slug": "oak-forest" },
       { "name": "Oak Lawn", "slug": "oak-lawn" },
       { "name": "Oak Park", "slug": "oak-park" },
@@ -1640,12 +1640,12 @@ export const usaStatesAndCitiesData = {
     { "name": "Joplin", "slug": "joplin" },
     { "name": "Kansas City", "slug": "kansas-city" },
     { "name": "Kirkwood", "slug": "kirkwood" },
-    { "name": "Lee’s Summit", "slug": "lees-summit" },
+    { "name": "Lee's Summit", "slug": "lees-summit" },
     { "name": "Liberty", "slug": "liberty" },
     { "name": "Maryland Heights", "slug": "maryland-heights" },
     { "name": "Mehlville", "slug": "mehlville" },
     { "name": "Nixa", "slug": "nixa" },
-    { "name": "O’Fallon", "slug": "ofallon" },
+    { "name": "O'Fallon", "slug": "ofallon" },
     { "name": "Oakville", "slug": "oakville" },
     { "name": "Old Jamestown", "slug": "old-jamestown" },
     { "name": "Ozark", "slug": "ozark" },
@@ -2714,7 +2714,7 @@ export const usaStatesAndCitiesData = {
     { "name": "Annandale", "slug": "annandale" },
     { "name": "Arlington", "slug": "arlington" },
     { "name": "Ashburn", "slug": "ashburn" },
-    { "name": "Bailey’s Crossroads", "slug": "baileys-crossroads" },
+    { "name": "Bailey's Crossroads", "slug": "baileys-crossroads" },
     { "name": "Blacksburg", "slug": "blacksburg" },
     { "name": "Brambleton", "slug": "brambleton" },
     { "name": "Buckhall", "slug": "buckhall" },
@@ -2924,3 +2924,17 @@ export const usaStatesAndCitiesData = {
 }
   ]
 };
+
+// Helper function to get all states
+export function getStates() {
+  return usaStatesAndCitiesData.states.map(state => ({
+    name: state.name,
+    abbreviation: state.abbreviation
+  }));
+}
+
+// Helper function to get cities by state code
+export function getCitiesByStateCode(stateCode: string) {
+  const state = usaStatesAndCitiesData.states.find(s => s.abbreviation === stateCode);
+  return state ? state.cities : [];
+}

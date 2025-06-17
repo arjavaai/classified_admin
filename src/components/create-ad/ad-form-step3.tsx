@@ -4,15 +4,20 @@ import { useAdCreation } from "./ad-creation-context"
 import { useState } from "react"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { doc, updateDoc } from "firebase/firestore"
+import { doc, updateDoc, addDoc, collection } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/AuthContext"
+import { isSuperAdminUser } from "@/lib/utils"
 
 export default function AdFormStep3({ disableForm = false }: { disableForm?: boolean }) {
   const { state, dispatch } = useAdCreation()
+  const { user } = useAuth()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  const isAdmin = isSuperAdminUser(user)
 
   const goToPreviousStep = () => {
     dispatch({ type: "SET_STEP", payload: 2 })
@@ -31,6 +36,12 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
       return
     }
 
+    // Check if Firebase is properly initialized
+    if (!db) {
+      setSubmitError("Firebase database not initialized. Please try again.")
+      return
+    }
+
     setSubmitError(null)
     setSubmitSuccess(false)
     setIsSubmitting(true)
@@ -40,12 +51,52 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
       console.log("Starting submit process...")
       console.log("Edit mode:", state.isEditMode)
       console.log("Ad ID:", state.adId)
+      console.log("Is Admin:", isAdmin)
+      console.log("User:", user)
       
       // Test Firebase connection first
       console.log("Testing Firebase connection...")
       console.log("Firebase db object:", db)
       console.log("Firebase app config:", db.app.options)
       
+      // Prepare common ad data
+      const adData = {
+        // Personal info
+        name: state.name,
+        category: state.category,
+        age: state.age,
+        contactPreference: state.contactPreference,
+        email: state.email,
+        phone: state.phone,
+        whatsapp: state.whatsapp,
+        sms: state.sms,
+        
+        // Location
+        state: state.state,
+        city: state.city,
+        
+        // Ad details
+        title: state.title,
+        description: state.description,
+        
+        // Characteristics
+        ethnicity: state.ethnicity || [],
+        nationality: state.nationality || [],
+        bodyType: state.bodyType || [],
+        breastType: state.breastType || [],
+        hairColor: state.hairColor || [],
+        services: state.services || [],
+        catersTo: state.catersTo || [],
+        placeOfService: state.placeOfService || [],
+        
+        // Rates
+        incallRates: state.incallRates || {},
+        outcallRates: state.outcallRates || {},
+        
+        // Photos
+        photos: state.photos || [],
+      };
+
       // Handle edit mode
       if (state.isEditMode && state.adId) {
         console.log("Processing edit mode update...")
@@ -55,44 +106,8 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
           throw new Error("Missing required fields: name, title, or description")
         }
         
-        // For edit mode, update the existing ad
         const updateData = {
-          // Personal info
-          name: state.name,
-          category: state.category,
-          age: state.age,
-          contactPreference: state.contactPreference,
-          email: state.email,
-          phone: state.phone,
-          whatsapp: state.whatsapp,
-          sms: state.sms,
-          
-          // Location
-          state: state.state,
-          city: state.city,
-          
-          // Ad details
-          title: state.title,
-          description: state.description,
-          
-          // Characteristics
-          ethnicity: state.ethnicity || [],
-          nationality: state.nationality || [],
-          bodyType: state.bodyType || [],
-          breastType: state.breastType || [],
-          hairColor: state.hairColor || [],
-          services: state.services || [],
-          catersTo: state.catersTo || [],
-          placeOfService: state.placeOfService || [],
-          
-          // Rates
-          incallRates: state.incallRates || {},
-          outcallRates: state.outcallRates || {},
-          
-          // Photos
-          photos: state.photos || [],
-          
-          // Update timestamp
+          ...adData,
           updatedAt: new Date().toISOString()
         };
 
@@ -103,9 +118,6 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
         const docRef = doc(db, 'ads', state.adId);
         console.log("Document reference created:", docRef);
         console.log("Document path:", docRef.path);
-        
-        // Test if we can create the reference without error
-        console.log("Document reference is valid:", !!docRef);
         
         // Attempt the update
         console.log("Attempting Firebase updateDoc...");
@@ -119,20 +131,83 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
         
         console.log("=== FIREBASE UPDATE DEBUG END - SUCCESS ===")
         
-        // Redirect back to users page with success message after showing success
+        // Redirect back to dashboard
         setTimeout(() => {
           router.push('/dashboard/users?status=updated');
         }, 2000);
         return;
+      } 
+      // Handle admin create mode (bypass payment)
+      else if (isAdmin && !state.isEditMode) {
+        console.log("Processing admin create mode (no payment required)...")
+        console.log("Selected ad type:", state.adType)
+        
+        // Validate required fields
+        if (!state.name || !state.title || !state.description) {
+          throw new Error("Missing required fields: name, title, or description")
+        }
+        
+        // Calculate expiration date based on ad type
+        const expirationDays = state.adType === 'premium' ? 30 : 1; // Premium: 30 days, Free: 1 day
+        const expirationDate = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
+        
+        const createData = {
+          ...adData,
+          // Required fields for compatibility with main app
+          adType: state.adType || 'free', // Use selected ad type
+          userId: user?.uid || user?.email || 'admin', // Use Firebase UID first, then email as fallback
+          
+          // Status and activation fields
+          status: 'active', // Admin ads are automatically active
+          isActive: true, // Set as active
+          isPaid: true, // Mark as paid since admin bypasses payment
+          isPromoted: state.adType === 'premium', // Premium ads are promoted
+          isPremium: state.adType === 'premium', // Set premium flag based on ad type
+          
+          // Admin tracking fields
+          createdBy: 'admin',
+          adminCreated: true,
+          adminEmail: user?.email, // Track which admin created it
+          
+          // Timestamps
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          expiresAt: expirationDate.toISOString(),
+          
+          // Terms
+          termsAccepted: state.termsAccepted,
+          termsAcceptedAt: new Date().toISOString(),
+        };
+
+        console.log("Create data prepared:", JSON.stringify(createData, null, 2));
+        
+        // Create new ad document
+        console.log("Attempting Firebase addDoc...");
+        const docRef = await addDoc(collection(db, 'ads'), createData);
+        console.log("Firebase addDoc completed with ID:", docRef.id);
+        console.log("Document created successfully!");
+        
+        // Show success message
+        setIsSubmitting(false);
+        setSubmitSuccess(true);
+        
+        console.log("=== FIREBASE CREATE DEBUG END - SUCCESS ===")
+        
+        // Redirect back to dashboard
+        setTimeout(() => {
+          router.push('/dashboard?status=created');
+        }, 2000);
+        return;
       } else {
-        console.log("Not in edit mode or missing ad ID");
+        console.log("Invalid configuration - not in edit mode or not admin");
         console.log("isEditMode:", state.isEditMode);
         console.log("adId:", state.adId);
-        throw new Error("Invalid edit mode configuration");
+        console.log("isAdmin:", isAdmin);
+        throw new Error("Invalid operation configuration");
       }
       
     } catch (error: any) {
-      console.log("=== FIREBASE UPDATE DEBUG END - ERROR ===")
+      console.log("=== FIREBASE OPERATION DEBUG END - ERROR ===")
       console.error("Error in ad submission:", error);
       console.error("Error type:", typeof error);
       console.error("Error constructor:", error.constructor.name);
@@ -168,7 +243,28 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-2xl font-semibold text-center mb-8">Terms, Conditions and Privacy Policy</h2>
+      <h2 className="text-2xl font-semibold text-center mb-8">
+        {isAdmin ? "Admin: Finalize Ad Creation" : "Terms, Conditions and Privacy Policy"}
+      </h2>
+      
+      {/* Admin Notice */}
+      {isAdmin && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-6">
+          <div className="flex items-center mb-2">
+            <CheckCircle className="h-5 w-5 mr-2" />
+            <span className="font-medium">Super Admin Mode</span>
+          </div>
+          <p className="mb-3">
+            You are creating a <strong>{state.adType === 'premium' ? 'Premium' : 'Free'}</strong> ad as super admin. 
+            Payment gateway will be bypassed and the ad will be automatically activated.
+          </p>
+          <div className="text-sm">
+            <p>• Ad Type: <strong>{state.adType === 'premium' ? 'Premium (30 days)' : 'Free (24 hours)'}</strong></p>
+            <p>• Status: <strong>Active immediately</strong></p>
+            <p>• Payment: <strong>Bypassed (Admin created)</strong></p>
+          </div>
+        </div>
+      )}
       
       {/* Success message */}
       {submitSuccess && (
@@ -177,7 +273,9 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
             <CheckCircle className="h-5 w-5 mr-2" />
             <span className="font-medium">Success!</span>
           </div>
-          <p className="mb-3">Advertisement updated successfully. Redirecting...</p>
+          <p className="mb-3">
+            {state.isEditMode ? "Advertisement updated successfully. Redirecting..." : "Advertisement created successfully. Redirecting..."}
+          </p>
         </div>
       )}
       
@@ -246,10 +344,10 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {state.isEditMode ? "Updating..." : "Submitting..."}
+              {state.isEditMode ? "Updating..." : (isAdmin ? "Creating Ad..." : "Submitting...")}
             </>
           ) : (
-            state.isEditMode ? "Update Post" : "Submit"
+            state.isEditMode ? "Update Ad" : (isAdmin ? "Create Ad" : "Publish Ad")
           )}
         </button>
       </div>

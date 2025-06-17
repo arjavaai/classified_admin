@@ -4,6 +4,7 @@ import type React from "react"
 import { useAdCreation } from "./ad-creation-context"
 import { useState, useEffect } from "react"
 import { AlertCircle, X } from "lucide-react"
+import { getStates, getCitiesByStateCode } from "../../lib/demo-data"
 
 // Import nationality data from search modal
 const ethnicities = ["Arabian", "Asian", "Ebony", "Caucasian", "Hispanic", "Indian", "Latin", "Mixed race", "Others"]
@@ -32,22 +33,7 @@ const services = [
 ]
 const catersTo = ["Men", "Women", "Non-binary", "Couples"]
 
-// Simple states and cities data
-const statesList = [
-  { name: "California", abbreviation: "CA" },
-  { name: "New York", abbreviation: "NY" },
-  { name: "Texas", abbreviation: "TX" },
-  { name: "Florida", abbreviation: "FL" },
-  { name: "Illinois", abbreviation: "IL" },
-]
 
-const citiesByState: Record<string, string[]> = {
-  "CA": ["Los Angeles", "San Francisco", "San Diego", "Sacramento"],
-  "NY": ["New York City", "Buffalo", "Rochester", "Syracuse"],
-  "TX": ["Houston", "Dallas", "Austin", "San Antonio"],
-  "FL": ["Miami", "Orlando", "Tampa", "Jacksonville"],
-  "IL": ["Chicago", "Springfield", "Rockford", "Peoria"],
-}
 
 // Import AdFormData type from context
 import { AdFormData as AdFormDataType } from "./ad-creation-context"
@@ -68,22 +54,29 @@ interface AdFormData extends Omit<AdFormDataType, 'step' | 'adType' | 'photos' |
 
 export default function AdFormStep1({ disableForm = false }: { disableForm?: boolean }) {
   const { state, dispatch } = useAdCreation()
-  const [citiesList, setCitiesList] = useState<string[]>([])
+  const [statesList, setStatesList] = useState<{name: string; abbreviation: string}[]>([])
+  const [citiesList, setCitiesList] = useState<{name: string; slug: string}[]>([])
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+
+  // Load states when component mounts
+  useEffect(() => {
+    setStatesList(getStates())
+  }, [])
 
   // Update cities when state changes
   useEffect(() => {
     if (state.state) {
+      // Find the state abbreviation from the full state name
       const stateObj = statesList.find(s => s.name === state.state);
       if (stateObj) {
-        setCitiesList(citiesByState[stateObj.abbreviation] || []);
+        setCitiesList(getCitiesByStateCode(stateObj.abbreviation));
       } else {
         setCitiesList([]);
       }
     } else {
       setCitiesList([]);
     }
-  }, [state.state])
+  }, [state.state, statesList])
 
   const handleChange = (field: keyof AdFormData, value: string | boolean | string[]) => {
     dispatch({
@@ -390,8 +383,8 @@ export default function AdFormStep1({ disableForm = false }: { disableForm?: boo
             >
               <option value="">{state.state ? "Select City" : "Select State First"}</option>
               {citiesList.map((city) => (
-                <option key={city} value={city}>
-                  {city}
+                <option key={city.slug} value={city.name}>
+                  {city.name}
                 </option>
               ))}
             </select>
@@ -463,7 +456,7 @@ export default function AdFormStep1({ disableForm = false }: { disableForm?: boo
               Description <span className="text-red-500">*</span>
             </label>
             <span className={`text-sm font-medium ${
-              state.description.length < 100 ? 'text-red-500' : 
+              state.description.length < 50 ? 'text-red-500' : 
               state.description.length > 3500 ? 'text-red-500' : 
               'text-gray-500'
             }`}>
@@ -483,16 +476,16 @@ export default function AdFormStep1({ disableForm = false }: { disableForm?: boo
             placeholder="Tell potential clients about yourself and your services..."
             maxLength={3500}
             className={`w-full p-4 text-base border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none ${
-              state.description.length < 100 && state.description.length > 0 ? 'border-red-500' : 
+              state.description.length < 50 && state.description.length > 0 ? 'border-red-500' : 
               validationErrors.description ? 'border-red-500' : 'border-gray-300'
             }`}
             disabled={disableForm}
           />
-          {state.description.length < 100 && state.description.length > 0 && (
+          {state.description.length < 50 && state.description.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-2">
               <div className="flex items-start">
                 <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
-                <p className="text-red-800 text-sm font-medium">Description must be at least 100 characters (currently {state.description.length})</p>
+                <p className="text-red-800 text-sm font-medium">Description must be at least 50 characters (currently {state.description.length})</p>
               </div>
             </div>
           )}
