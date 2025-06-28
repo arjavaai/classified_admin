@@ -12,6 +12,8 @@ interface User {
   displayName?: string;
   createdAt?: string;
   role?: string;
+  phone?: string;
+  photoURL?: string;
 }
 
 interface Ad {
@@ -34,6 +36,7 @@ export default function UsersPage() {
   const [adsError, setAdsError] = useState('');
   const [userAds, setUserAds] = useState<Ad[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   
   // New state for pagination and search
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,6 +47,12 @@ export default function UsersPage() {
     const fetchUsers = async () => {
       try {
         setIsLoading(true);
+        
+        if (!db) {
+          setError('Firebase not initialized');
+          return;
+        }
+        
         const usersCollection = collection(db, 'users');
         const userSnapshot = await getDocs(usersCollection);
         const usersList = userSnapshot.docs.map(doc => ({
@@ -98,6 +107,11 @@ export default function UsersPage() {
   const handleDeleteUser = async (userId: string) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
+        if (!db) {
+          setError('Firebase not initialized');
+          return;
+        }
+        
         await deleteDoc(doc(db, 'users', userId));
         setUsers(users.filter(user => user.id !== userId));
       } catch (err) {
@@ -113,6 +127,11 @@ export default function UsersPage() {
     setAdsLoading(true);
     setAdsError('');
     try {
+      if (!db) {
+        setAdsError('Firebase not initialized');
+        return;
+      }
+      
       const adsSnapshot = await getDocs(collection(db, 'ads'));
       const adsList = adsSnapshot.docs
         .map(doc => ({ id: doc.id, ...(doc.data() as any) }))
@@ -128,6 +147,11 @@ export default function UsersPage() {
   const handleDeleteAd = async (adId: string) => {
     if (!window.confirm('Are you sure you want to delete this ad?')) return;
     try {
+      if (!db) {
+        alert('Firebase not initialized');
+        return;
+      }
+      
       await deleteDoc(doc(db, 'ads', adId));
       setUserAds(userAds.filter(ad => ad.id !== adId));
     } catch (err) {
@@ -135,9 +159,14 @@ export default function UsersPage() {
     }
   };
 
+  const handleViewProfile = (user: User) => {
+    setSelectedUser(user);
+    setShowProfileModal(true);
+  };
+
   const handleEditAd = (ad: Ad) => {
-    // Navigate to dedicated edit page similar to classified app
-    router.push(`/dashboard/ads/edit/${ad.id}`);
+    // Navigate to edit page for the ad
+    window.open(`/dashboard/listings/edit/${ad.id}`, '_blank');
   };
 
   // Remove the inline editing handlers since we're using dedicated edit page
@@ -350,7 +379,7 @@ export default function UsersPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <div className="flex items-center space-x-3">
                     <button
-                      onClick={() => router.push(`/dashboard/users/edit/${user.id}`)}
+                      onClick={() => handleViewProfile(user)}
                             className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 font-medium rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors duration-200"
                     >
                             <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -441,6 +470,161 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {/* User Profile Modal */}
+      <Dialog open={showProfileModal} onClose={() => setShowProfileModal(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-auto max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between">
+              <DialogTitle className="text-2xl font-bold text-gray-900">
+                Your Profile
+              </DialogTitle>
+              <div className="flex items-center space-x-2">
+               
+                <button
+                  onClick={() => setShowProfileModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Profile Content */}
+            <div className="p-6 bg-gray-50">
+              {selectedUser && (
+                <div className="space-y-6">
+                  {/* Profile Picture and Name */}
+                  <div className="flex items-start space-x-4">
+                    <div className="flex-shrink-0">
+                      {selectedUser.photoURL ? (
+                        <img 
+                          src={selectedUser.photoURL} 
+                          alt="Profile" 
+                          className="h-20 w-20 rounded-full object-cover border-4 border-white shadow-lg"
+                        />
+                      ) : (
+                        <div className="h-20 w-20 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                          <span className="text-2xl font-bold text-white">
+                            {selectedUser.displayName ? selectedUser.displayName.charAt(0).toUpperCase() : selectedUser.email.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                        {selectedUser.displayName || 'No Display Name'}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {/* Contact Information */}
+                  <div className="space-y-4">
+                    {/* Email */}
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 mt-1">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-600 mb-1">Email</p>
+                        <p className="text-lg font-semibold text-gray-900 break-all">{selectedUser.email}</p>
+                      </div>
+                    </div>
+
+                    {/* Phone */}
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 mt-1">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-600 mb-1">Phone</p>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {selectedUser.phone || 'Not provided'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Customer ID */}
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 mt-1">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V4a2 2 0 114 0v2m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-600 mb-1">Customer ID</p>
+                        <p className="text-lg font-semibold text-gray-900 font-mono break-all">{selectedUser.id}</p>
+                      </div>
+                    </div>
+
+                    {/* Account Created */}
+                    {selectedUser.createdAt && (
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 mt-1">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 4h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-600 mb-1">Account Created</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {new Date(selectedUser.createdAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Role */}
+                    {selectedUser.role && (
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 mt-1">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-600 mb-1">Role</p>
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                            {selectedUser.role}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        setShowProfileModal(false);
+                        handleCheckAds(selectedUser);
+                      }}
+                      className="w-full inline-flex items-center justify-center px-4 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors duration-200"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      View User's Advertisements
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
 
       {/* Enhanced Ads Modal */}
       <Dialog open={showAdsModal} onClose={() => { setShowAdsModal(false); }} className="relative z-50">
@@ -535,11 +719,11 @@ export default function UsersPage() {
                           </div>
                         </div>
                       </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </DialogPanel>
         </div>
       </Dialog>
