@@ -45,16 +45,23 @@ export default function AdminCreateAdPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Admin Header */}
       <div className="bg-blue-600 text-white py-6">
         <div className="max-w-7xl mx-auto px-4">
           <h1 className="text-3xl font-bold">Admin: Create Ad</h1>
           <p className="mt-2 text-blue-100">Create ads without payment gateway as super admin</p>
+          <div className="mt-4 bg-blue-700 rounded-lg p-4">
+            <div className="flex items-center space-x-4 text-sm">
+              <div>👤 <strong>Admin:</strong> {user?.email}</div>
+              <div>🔧 <strong>Mode:</strong> Super Admin</div>
+              <div>💳 <strong>Payment:</strong> Bypassed</div>
+            </div>
+          </div>
         </div>
       </div>
       
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <CreateAdForm />
-      </div>
+      {/* CreateAdForm - will start from ad type selection */}
+      <CreateAdForm />
     </div>
   );
 } 

@@ -33,8 +33,6 @@ export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [stateFilter, setStateFilter] = useState<string>('all');
   const [selectedState, setSelectedState] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,7 +55,13 @@ export default function ListingsPage() {
     const fetchListings = async () => {
       try {
         setIsLoading(true);
-        const listingsCollection = collection(db, 'listings');
+        
+        if (!db) {
+          setError('Firebase not initialized');
+          return;
+        }
+        
+        const listingsCollection = collection(db, 'ads');
         const listingSnapshot = await getDocs(listingsCollection);
         const listingsList = listingSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -78,7 +82,12 @@ export default function ListingsPage() {
   const handleDeleteListing = async (listingId: string) => {
     if (window.confirm('Are you sure you want to delete this listing?')) {
       try {
-        await deleteDoc(doc(db, 'listings', listingId));
+        if (!db) {
+          setError('Firebase not initialized');
+          return;
+        }
+        
+        await deleteDoc(doc(db, 'ads', listingId));
         setListings(listings.filter(listing => listing.id !== listingId));
       } catch (err) {
         console.error('Error deleting listing:', err);
@@ -89,7 +98,12 @@ export default function ListingsPage() {
 
   const handleUpdateStatus = async (listingId: string, newStatus: 'active' | 'pending' | 'rejected') => {
     try {
-      const listingRef = doc(db, 'listings', listingId);
+      if (!db) {
+        setError('Firebase not initialized');
+        return;
+      }
+      
+      const listingRef = doc(db, 'ads', listingId);
       await updateDoc(listingRef, {
         status: newStatus,
         updatedAt: new Date().toISOString()
@@ -106,11 +120,7 @@ export default function ListingsPage() {
     }
   };
 
-  const filteredListings = listings.filter(listing => {
-    const matchesStatus = statusFilter === 'all' || listing.status === statusFilter;
-    const matchesState = stateFilter === 'all' || listing.state === stateFilter;
-    return matchesStatus && matchesState;
-  });
+  const filteredListings = listings;
 
   // Get unique states for filter
   const states = Array.from(new Set(listings.map(listing => listing.state))).sort();
@@ -144,6 +154,11 @@ export default function ListingsPage() {
     setError('');
     
     try {
+      if (!db) {
+        setError('Firebase not initialized');
+        return;
+      }
+      
       // Convert state abbreviation to full name
       const stateName = getStateNameFromAbbreviation(selectedState);
       let cityName = '';
@@ -284,6 +299,11 @@ export default function ListingsPage() {
     if (!searchQuery.trim()) return;
     
     try {
+      if (!db) {
+        setError('Firebase not initialized');
+        return;
+      }
+      
       const docRef = doc(db, 'ads', searchQuery);
       const docSnap = await getDoc(docRef);
       
@@ -367,40 +387,6 @@ export default function ListingsPage() {
       )}
 
       <div className="mb-6 flex flex-wrap gap-4">
-        <div>
-          <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700">
-            Filter by Status
-          </label>
-          <select
-            id="statusFilter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-          >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="pending">Pending</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
-        
-        <div>
-          <label htmlFor="stateFilter" className="block text-sm font-medium text-gray-700">
-            Filter by State
-          </label>
-          <select
-            id="stateFilter"
-            value={stateFilter}
-            onChange={(e) => setStateFilter(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-          >
-            <option value="all">All States</option>
-            {states.map(state => (
-              <option key={state} value={state}>{state}</option>
-            ))}
-          </select>
-        </div>
-
         {/* State Dropdown */}
         <div className="flex-1 min-w-[200px]">
           <label className="block text-sm font-medium text-gray-700 mb-1">

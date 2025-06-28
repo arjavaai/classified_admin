@@ -42,12 +42,18 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
       return
     }
 
+    // Validate user authentication
+    if (!user) {
+      setSubmitError("User not authenticated. Please log in and try again.")
+      return
+    }
+
     setSubmitError(null)
     setSubmitSuccess(false)
     setIsSubmitting(true)
 
     try {
-      console.log("=== FIREBASE UPDATE DEBUG START ===")
+      console.log("=== FIREBASE OPERATION DEBUG START ===")
       console.log("Starting submit process...")
       console.log("Edit mode:", state.isEditMode)
       console.log("Ad ID:", state.adId)
@@ -57,7 +63,19 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
       // Test Firebase connection first
       console.log("Testing Firebase connection...")
       console.log("Firebase db object:", db)
-      console.log("Firebase app config:", db.app.options)
+      
+      // Validate required fields
+      if (!state.name || !state.title || !state.description) {
+        throw new Error("Missing required fields: name, title, or description")
+      }
+
+      if (!state.state || !state.city) {
+        throw new Error("Missing required location fields: state or city")
+      }
+
+      if (!state.age) {
+        throw new Error("Missing required field: age")
+      }
       
       // Prepare common ad data
       const adData = {
@@ -101,11 +119,6 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
       if (state.isEditMode && state.adId) {
         console.log("Processing edit mode update...")
         
-        // Validate required fields
-        if (!state.name || !state.title || !state.description) {
-          throw new Error("Missing required fields: name, title, or description")
-        }
-        
         const updateData = {
           ...adData,
           updatedAt: new Date().toISOString()
@@ -117,12 +130,10 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
         // Create document reference
         const docRef = doc(db, 'ads', state.adId);
         console.log("Document reference created:", docRef);
-        console.log("Document path:", docRef.path);
         
         // Attempt the update
         console.log("Attempting Firebase updateDoc...");
-        const updateResult = await updateDoc(docRef, updateData);
-        console.log("Firebase updateDoc completed:", updateResult);
+        await updateDoc(docRef, updateData);
         console.log("Document updated successfully!");
         
         // Show success message
@@ -133,7 +144,7 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
         
         // Redirect back to dashboard
         setTimeout(() => {
-          router.push('/dashboard/users?status=updated');
+          router.push('/dashboard/listings?status=updated');
         }, 2000);
         return;
       } 
@@ -142,20 +153,19 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
         console.log("Processing admin create mode (no payment required)...")
         console.log("Selected ad type:", state.adType)
         
-        // Validate required fields
-        if (!state.name || !state.title || !state.description) {
-          throw new Error("Missing required fields: name, title, or description")
-        }
-        
         // Calculate expiration date based on ad type
         const expirationDays = state.adType === 'premium' ? 30 : 1; // Premium: 30 days, Free: 1 day
         const expirationDate = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
+        
+        // Generate a simple unique ad ID for admin created ads
+        const adminAdId = `ADMIN${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
         
         const createData = {
           ...adData,
           // Required fields for compatibility with main app
           adType: state.adType || 'free', // Use selected ad type
-          userId: user?.uid || user?.email || 'admin', // Use Firebase UID first, then email as fallback
+          userId: user?.uid || `admin-${user?.email?.replace('@', '-').replace('.', '-')}` || 'admin-system', // Use Firebase UID first, then admin prefix with email
+          adId: adminAdId, // Add unique ad ID
           
           // Status and activation fields
           status: 'active', // Admin ads are automatically active
@@ -203,7 +213,7 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
         console.log("isEditMode:", state.isEditMode);
         console.log("adId:", state.adId);
         console.log("isAdmin:", isAdmin);
-        throw new Error("Invalid operation configuration");
+        throw new Error("Invalid operation: Only super admins can create ads in this panel");
       }
       
     } catch (error: any) {
@@ -353,4 +363,4 @@ export default function AdFormStep3({ disableForm = false }: { disableForm?: boo
       </div>
     </div>
   )
-} 
+}

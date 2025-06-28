@@ -1,7 +1,204 @@
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Helper functions for validation and security
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return request.auth != null && 
+        (
+          // Check if user document exists and has admin role
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin') ||
+          // Allow specific admin emails (fallback for initial setup)
+          request.auth.token.email in [
+            'skluva.com@gmail.com', // Super admin email
+            'admin@skluva.com' // Regular admin email
+          ]
+        );
+    }
+    
+    function isValidEmail(email) {
+      return email.matches('.*@.*\\..*');
+    }
+    
+    function isValidAdData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['title', 'description', 'userId', 'createdAt']) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 5000 &&
+        data.userId is string &&
+        data.createdAt is timestamp;
+    }
+    
+    function isValidUserData() {
+      let data = request.resource.data;
+      return data.email is string && isValidEmail(data.email) &&
+        data.createdAt is timestamp;
+    }
+    
+    // Users collection - More permissive for authenticated users
+    match /users/{userId} {
+      // Users can read and write their own profile
+      allow read, write: if isOwner(userId);
+      
+      // Admins can read and write all users
+      allow read, write: if isAdmin();
+      
+      // Allow user creation during signup
+      allow create: if isAuthenticated() && 
+        request.auth.uid == userId;
+    }
+    
+    // Ads collection
+    match /ads/{adId} {
+      // Public read access for all ads
+      allow read: if true;
+      
+      // Authenticated users can create ads
+      allow create: if isAuthenticated();
+      
+      // Owner or admin can update/delete ads
+      allow update, delete: if isAuthenticated() && 
+        (isOwner(resource.data.userId) || isAdmin());
+    }
+    
+    // Payments collection
+    match /payments/{paymentId} {
+      // Users can access their own payments
+      allow read, write: if isAuthenticated() && 
+        (request.auth.uid == resource.data.get('userId', '') || 
+         request.auth.uid == request.resource.data.get('userId', ''));
+      
+      // Admins can read all payments
+      allow read, write: if isAdmin();
+    }
+    
+    // Blog posts collection
+    match /blog/{postId} {
+      // Public read access
+      allow read: if true;
+      
+      // Admins can manage blog posts
+      allow create, update, delete: if isAdmin();
+      
+      // Authenticated users can create blog posts (if needed)
+      allow create: if isAuthenticated();
+    }
+    
+    // Location content collection
+    match /location-content/{locationId} {
+      // Public read access
+      allow read: if true;
+      
+      // Admins can manage location content
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // City content subcollection
+    match /location-content/{stateId}/cities/{cityId} {
+      // Public read access
+      allow read: if true;
+      
+      // Admins can manage
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Analytics collection
+    match /analytics/{docId} {
+      // Admins can access analytics
+      allow read, write: if isAdmin();
+      
+      // Allow system writes for tracking
+      allow create: if true; // More permissive for analytics
+    }
+    
+    // User activity tracking
+    match /user-activity/{userId} {
+      // Users can read their own activity
+      allow read: if isOwner(userId);
+      
+      // Allow activity creation
+      allow create: if isAuthenticated();
+      
+      // Admins can read all activity
+      allow read, write: if isAdmin();
+    }
+    
+    // Ad boost/promotion tracking
+    match /ad-boosts/{boostId} {
+      // Users can read their own boost records
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == resource.data.get('userId', '') ||
+         request.auth.uid == request.resource.data.get('userId', ''));
+      
+      // Allow boost creation
+      allow create: if isAuthenticated();
+      
+      // Admins can read all boosts
+      allow read, write: if isAdmin();
+    }
+    
+    // Reported content collection
+    match /reports/{reportId} {
+      // Users can create reports
+      allow create: if isAuthenticated();
+      
+      // Admins can manage reports
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // Email verification collection
+    match /email-verification/{verificationId} {
+      // Users can access their own verification
+      allow read, write: if isAuthenticated();
+      
+      // Allow verification creation
+      allow create: if true;
+    }
+    
+    // Site configuration
+    match /site-config/{configId} {
+      // Public read for public configs
+      allow read: if resource.data.get('public', false) == true;
+      
+      // Admins can manage all configs
+      allow read, write: if isAdmin();
+    }
+    
+    // Pages collection (for dynamic pages)
+    match /pages/{pageId} {
+      // Public read access
+      allow read: if true;
+      
+      // Admins can manage pages
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Listings collection (classified ads)
+    match /listings/{listingId} {
+      // Public read access
+      allow read: if true;
+      
+      // Authenticated users can create listings
+      allow create: if isAuthenticated();
+      
+      // Owner or admin can update/delete
+      allow update, delete: if isAuthenticated() && 
+        (isOwner(resource.data.get('userId', '')) || isAdmin());
+    }
+    
+    // Default fallback - Allow authenticated users to read/write most collections
+    // This provides a safety net for any collections not explicitly defined
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated();
     }
   }
 }
