@@ -443,19 +443,50 @@ export default function ListingsPage() {
         <div className="mb-8">
           <h2 className="mb-4 text-lg font-medium text-gray-900">Searched Ad</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-row hover:shadow-md transition-shadow h-[253px] sm:h-[242px] md:h-[242px] relative">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-row hover:shadow-md transition-shadow"
+                 style={{ minHeight: '170px', height: '170px' }}>
               <ImageCarousel 
                 images={searchedAd.photos || []} 
                 photoCount={searchedAd.photos?.length || 0}
               />
-              <div className="p-3 sm:p-5 flex-1 flex flex-col justify-between">
+              <div className="flex flex-col justify-between flex-1 p-2 h-full">
+                {/* Top badges and title */}
                 <div>
-                  <div className="text-black font-bold text-sm sm:text-base mb-1 sm:mb-2 line-clamp-3 leading-tight">{searchedAd.title}</div>
-                  <p className="text-gray-700 text-xs sm:text-sm mb-2 sm:mb-3 line-clamp-2 leading-tight sm:leading-normal">{searchedAd.description}</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="font-bold text-xs line-clamp-2 leading-tight" style={{ maxWidth: '100px' }}>{searchedAd.title}</div>
+                    <div className="flex flex-col items-end gap-1 min-w-[50px]">
+                      {searchedAd.boosted && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 whitespace-nowrap">👑 TOP</span>
+                      )}
+                      {!searchedAd.boosted && searchedAd.adType === 'premium' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 whitespace-nowrap">Premium</span>
+                      )}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap ${searchedAd.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{searchedAd.status.charAt(0).toUpperCase() + searchedAd.status.slice(1)}</span>
+                    </div>
+                  </div>
+                  <p className="text-gray-700 text-xs mb-1 line-clamp-2 leading-tight" style={{ minHeight: '18px' }}>{searchedAd.description}</p>
                 </div>
-                <div className="flex items-center justify-between text-xs text-gray-500">
+                {/* Location and date */}
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                   <span>{searchedAd.city}, {searchedAd.state}</span>
-                  <span>{new Date(searchedAd.createdAt).toLocaleDateString()}</span>
+                  <span>{searchedAd.createdAt ? new Date(searchedAd.createdAt).toLocaleDateString() : 'Invalid Date'}</span>
+                </div>
+                {/* Buttons */}
+                <div className="flex items-center gap-2 mt-auto">
+                  <Link
+                    href={`/dashboard/listings/edit/${searchedAd.id}`}
+                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    style={{ minWidth: '50px', justifyContent: 'center' }}
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    onClick={() => handleDeleteListing(searchedAd.id)}
+                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    style={{ minWidth: '50px', justifyContent: 'center' }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
