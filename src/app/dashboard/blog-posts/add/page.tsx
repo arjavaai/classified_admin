@@ -1,17 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { X } from 'lucide-react';
+import { X, Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import RichTextEditor from '@/components/rich-text-editor';
+import { processImage, uploadImageToFirebase } from '@/lib/image-utils';
+import { validateImageFile } from '@/lib/mobile-image-utils';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface UploadingImage {
+  url: string;
+  progress: number;
+  file?: File;
+  error?: string;
+  status: 'uploading' | 'processing' | 'complete' | 'error';
+}
 
 export default function AddBlogPostPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [tagInput, setTagInput] = useState('');
+  const [uploadingImage, setUploadingImage] = useState<UploadingImage | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     slug: '',
@@ -74,6 +88,81 @@ export default function AddBlogPostPage() {
     }));
   };
 
+  // Handle image upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setError(validation.error || 'Invalid image file');
+      return;
+    }
+
+    const tempUrl = URL.createObjectURL(file);
+    setUploadingImage({ url: tempUrl, progress: 0, file, status: 'uploading' });
+    setError('');
+
+    try {
+      // Update to processing
+      setUploadingImage(prev => prev ? { ...prev, progress: 10, status: 'processing' } : null);
+
+      // Process the image
+      const processedImage = await processImage(file, '/assets/skluva_logo.png');
+      
+      // Update to uploading
+      setUploadingImage(prev => prev ? { ...prev, progress: 30, status: 'uploading' } : null);
+
+      // Upload to Firebase
+      const userId = user.uid || user.email || 'admin';
+      const downloadURL = await uploadImageToFirebase(
+        `blog-covers/${userId}`,
+        processedImage,
+        file.name,
+        (progress) => {
+          const mappedProgress = 30 + (progress * 0.7);
+          setUploadingImage(prev => prev ? {
+            ...prev,
+            progress: mappedProgress,
+            status: progress >= 100 ? 'complete' : 'uploading'
+          } : null);
+        }
+      );
+
+      // Update form data and cleanup
+      setFormData(prev => ({ ...prev, coverImage: downloadURL }));
+      setTimeout(() => {
+        setUploadingImage(null);
+        URL.revokeObjectURL(tempUrl);
+      }, 1000);
+    } catch (error) {
+      console.error('Image upload error:', error);
+      setUploadingImage(prev => prev ? {
+        ...prev,
+        error: error instanceof Error ? error.message : 'Upload failed',
+        status: 'error'
+      } : null);
+    }
+  };
+
+  // Remove uploaded image
+  const handleRemoveImage = () => {
+    setFormData(prev => ({ ...prev, coverImage: '' }));
+    if (uploadingImage) {
+      URL.revokeObjectURL(uploadingImage.url);
+      setUploadingImage(null);
+    }
+  };
+
+  // Retry failed upload
+  const handleRetryUpload = () => {
+    if (uploadingImage?.file && fileInputRef.current) {
+      const event = { target: { files: [uploadingImage.file] } } as React.ChangeEvent<HTMLInputElement>;
+      handleImageUpload(event);
+    }
+  };
+
   // Submit the form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,6 +179,8 @@ export default function AddBlogPostPage() {
       
       const blogPostData = {
         ...formData,
+        createdBy: user.uid,
+        createdByEmail: user.email,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -211,28 +302,94 @@ export default function AddBlogPostPage() {
         </div>
         
         <div>
-          <label htmlFor="coverImage" className="block text-sm font-medium text-gray-700">
-            Cover Image URL (optional)
+          <label className="block text-sm font-medium text-gray-700">
+            Cover Image (optional)
           </label>
-          <input
-            type="text"
-            id="coverImage"
-            name="coverImage"
-            value={formData.coverImage}
-            onChange={handleChange}
-            placeholder="https://example.com/image.jpg"
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-          />
-          {formData.coverImage && (
+          
+          {!formData.coverImage && !uploadingImage && (
+            <div className="mt-1">
+              <div 
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 cursor-pointer transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-sm text-gray-600 mb-2">Click to upload cover image</p>
+                <p className="text-xs text-gray-500">Supports: JPG, PNG, WebP (Max 10MB)</p>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+            </div>
+          )}
+
+          {uploadingImage && (
             <div className="mt-2">
+              <div className="relative">
+                <img 
+                  src={uploadingImage.url} 
+                  alt="Uploading cover" 
+                  className="h-32 w-auto rounded-md object-cover"
+                />
+                
+                {uploadingImage.status === 'error' ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 rounded-md">
+                    <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+                    <p className="text-xs text-white text-center mb-2">{uploadingImage.error}</p>
+                    <button
+                      onClick={handleRetryUpload}
+                      className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : uploadingImage.status === 'complete' ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-green-500 bg-opacity-80 rounded-md">
+                    <CheckCircle className="w-12 h-12 text-white" />
+                  </div>
+                ) : uploadingImage.status === 'processing' ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-80 rounded-md">
+                    <div className="flex flex-col items-center">
+                      <Loader2 className="w-10 h-10 text-white animate-spin mb-2" />
+                      <p className="text-sm text-white">Processing...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 rounded-md">
+                    <div className="w-3/4">
+                      <div className="h-2 bg-gray-200 bg-opacity-70 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-white rounded-full transition-all duration-300" 
+                          style={{ width: `${uploadingImage.progress}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-center mt-1 text-white">
+                        Uploading {Math.round(uploadingImage.progress)}%
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {formData.coverImage && !uploadingImage && (
+            <div className="mt-2 relative inline-block">
               <img 
                 src={formData.coverImage} 
                 alt="Cover preview" 
                 className="h-32 w-auto rounded-md object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Invalid+Image+URL';
-                }}
               />
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
         </div>

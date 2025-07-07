@@ -2,20 +2,28 @@
 
 import { useAdCreation } from "./ad-creation-context"
 import { useRef, useState, useEffect } from "react"
-import { Trash2, Upload, CheckCircle, AlertCircle, Info, X } from "lucide-react"
+import { Trash2, Upload, CheckCircle, AlertCircle, Info, X, Loader2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import { validateImageSize, processImage, uploadImageToFirebase } from "@/lib/image-utils"
-import { storage } from "@/lib/firebase"
+import { processImage, uploadImageToFirebase } from "@/lib/image-utils"
+import { validateImageFile, isMobileDevice, triggerImageCapture } from "@/lib/mobile-image-utils"
+
+interface UploadingPhoto {
+  url: string;
+  progress: number;
+  file?: File;
+  error?: string;
+  status: 'uploading' | 'processing' | 'complete' | 'error';
+}
 
 export default function AdFormStep2({ disableForm = false }: { disableForm?: boolean }) {
   const { state, dispatch } = useAdCreation()
   const { user } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploadingPhotos, setUploadingPhotos] = useState<{ url: string; progress: number; file?: File; error?: string }[]>([])
+  const [uploadingPhotos, setUploadingPhotos] = useState<UploadingPhoto[]>([])
   const [dragActive, setDragActive] = useState(false)
-  const [watermarkLoaded, setWatermarkLoaded] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -45,15 +53,9 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
     }
   }
 
-  // Check if watermark image exists when component mounts
+  // Check if user is on mobile device
   useEffect(() => {
-    const watermarkImg = new Image();
-    watermarkImg.onload = () => setWatermarkLoaded(true);
-    watermarkImg.onerror = () => {
-      console.error("Watermark image not found");
-      setErrorMessage("Watermark image not found. Please contact support.");
-    };
-    watermarkImg.src = "/assets/skluva_logo.png";
+    setIsMobile(isMobileDevice());
   }, []);
 
   // Clear validation message when all images finish uploading
@@ -81,64 +83,95 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
       return;
     }
     
-    // Process each file
+    // Process each file with server-side upload
     for (const file of filesToProcess) {
-      // Validate file size (2MB limit)
-      const sizeValidation = validateImageSize(file);
-      if (!sizeValidation.valid) {
+      // Validate file with new validation function
+      const validation = validateImageFile(file);
+      if (!validation.valid) {
         const tempUrl = URL.createObjectURL(file);
         setUploadingPhotos((prev) => [
           ...prev, 
-          { url: tempUrl, progress: 0, file, error: sizeValidation.error }
+          { url: tempUrl, progress: 0, file, error: validation.error, status: 'error' }
         ]);
         continue;
       }
       
       // Create a temporary URL for preview
       const tempUrl = URL.createObjectURL(file);
-      setUploadingPhotos((prev) => [...prev, { url: tempUrl, progress: 0, file }]);
+      setUploadingPhotos((prev) => [...prev, { 
+        url: tempUrl, 
+        progress: 0, 
+        file, 
+        status: 'uploading' 
+      }]);
       
       try {
+        console.log('Processing image:', file.name);
+        
+        // Update status to processing
+        setUploadingPhotos((prev) =>
+          prev.map((item) =>
+            item.url === tempUrl ? { ...item, progress: 10, status: 'processing' } : item
+          )
+        );
+
         // Process the image (add watermark, adjust opacity)
         const processedImage = await processImage(file, '/assets/skluva_logo.png');
         
-        // Upload to Firebase if user is logged in
-        if (user) {
-          // Use user email or uid for folder structure
-          const userId = user.uid || user.email || 'admin';
-          
-          // Upload the processed image to Firebase Storage
-          uploadImageToFirebase(
-            userId,
-            processedImage,
-            file.name,
-            (progress) => {
-              setUploadingPhotos((prev) =>
-                prev.map((item) =>
-                  item.url === tempUrl ? { ...item, progress } : item
-                )
-              );
-            }
-          ).then(downloadURL => {
-            // Add the download URL to the form state
-            dispatch({ type: "ADD_PHOTO", payload: downloadURL });
-            // Remove from uploading list
-            setUploadingPhotos((prev) => prev.filter((item) => item.url !== tempUrl));
-            URL.revokeObjectURL(tempUrl);
-          }).catch(error => {
-            console.error("Upload error:", error);
-            setUploadingPhotos((prev) =>
-              prev.map((item) =>
-                item.url === tempUrl ? { ...item, error: "Upload failed. Please try again." } : item
-              )
-            );
-          });
-        }
-      } catch (error) {
-        console.error("Image processing error:", error);
+        // Update progress after processing
         setUploadingPhotos((prev) =>
           prev.map((item) =>
-            item.url === tempUrl ? { ...item, error: "Processing failed. Please try again." } : item
+            item.url === tempUrl ? { ...item, progress: 30, status: 'uploading' } : item
+          )
+        );
+
+        // Upload to Firebase
+        const userId = user.uid || user.email || 'admin';
+        const downloadURL = await uploadImageToFirebase(
+          userId,
+          processedImage,
+          file.name,
+          (progress) => {
+            // Map Firebase progress (0-100) to our range (30-100)
+            const mappedProgress = 30 + (progress * 0.7);
+            setUploadingPhotos((prev) =>
+              prev.map((item) =>
+                item.url === tempUrl ? { 
+                  ...item, 
+                  progress: mappedProgress,
+                  status: progress >= 100 ? 'complete' : 'uploading'
+                } : item
+              )
+            );
+          }
+        );
+
+        // Mark as complete
+        setUploadingPhotos((prev) =>
+          prev.map((item) =>
+            item.url === tempUrl ? { ...item, progress: 100, status: 'complete' } : item
+          )
+        );
+
+        // Add a small delay to show completion state
+        setTimeout(() => {
+          // Add the download URL to the form state
+          dispatch({ type: "ADD_PHOTO", payload: downloadURL });
+          // Remove from uploading list
+          setUploadingPhotos((prev) => prev.filter((item) => item.url !== tempUrl));
+          URL.revokeObjectURL(tempUrl);
+        }, 500);
+
+        console.log('Image uploaded successfully:', downloadURL);
+      } catch (error) {
+        console.error("Upload error:", error);
+        setUploadingPhotos((prev) =>
+          prev.map((item) =>
+            item.url === tempUrl ? { 
+              ...item, 
+              error: error instanceof Error ? error.message : "Upload failed. Please try again.",
+              status: 'error'
+            } : item
           )
         );
       }
@@ -152,6 +185,93 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
   const removeUploadingPhoto = (url: string) => {
     setUploadingPhotos((prev) => prev.filter((item) => item.url !== url));
     URL.revokeObjectURL(url);
+  }
+
+  const retryFailedUpload = async (failedPhoto: UploadingPhoto) => {
+    if (!user || !failedPhoto.file) return;
+    
+    // Remove the failed upload from the list
+    setUploadingPhotos((prev) => prev.filter((photo) => photo.url !== failedPhoto.url));
+    
+    // Create new temporary URL
+    const tempUrl = URL.createObjectURL(failedPhoto.file);
+    setUploadingPhotos((prev) => [...prev, { 
+      url: tempUrl, 
+      progress: 0, 
+      file: failedPhoto.file!, 
+      status: 'uploading' 
+    }]);
+    
+    try {
+      console.log('Retrying upload for:', failedPhoto.file.name);
+      
+      // Update status to processing
+      setUploadingPhotos((prev) =>
+        prev.map((item) =>
+          item.url === tempUrl ? { ...item, progress: 10, status: 'processing' } : item
+        )
+      );
+
+      // Process the image (add watermark, adjust opacity)
+      const processedImage = await processImage(failedPhoto.file, '/assets/skluva_logo.png');
+      
+      // Update progress after processing
+      setUploadingPhotos((prev) =>
+        prev.map((item) =>
+          item.url === tempUrl ? { ...item, progress: 30, status: 'uploading' } : item
+        )
+      );
+
+      // Upload to Firebase
+      const userId = user.uid || user.email || 'admin';
+      const downloadURL = await uploadImageToFirebase(
+        userId,
+        processedImage,
+        failedPhoto.file.name,
+        (progress) => {
+          // Map Firebase progress (0-100) to our range (30-100)
+          const mappedProgress = 30 + (progress * 0.7);
+          setUploadingPhotos((prev) =>
+            prev.map((item) =>
+              item.url === tempUrl ? { 
+                ...item, 
+                progress: mappedProgress,
+                status: progress >= 100 ? 'complete' : 'uploading'
+              } : item
+            )
+          );
+        }
+      );
+
+      // Mark as complete
+      setUploadingPhotos((prev) =>
+        prev.map((item) =>
+          item.url === tempUrl ? { ...item, progress: 100, status: 'complete' } : item
+        )
+      );
+
+      setTimeout(() => {
+        dispatch({ type: "ADD_PHOTO", payload: downloadURL });
+        setUploadingPhotos((prev) => prev.filter((item) => item.url !== tempUrl));
+        URL.revokeObjectURL(tempUrl);
+      }, 500);
+
+      console.log('Retry upload successful:', downloadURL);
+    } catch (error) {
+      console.error("Retry upload error:", error);
+      setUploadingPhotos((prev) =>
+        prev.map((item) =>
+          item.url === tempUrl ? { 
+            ...item, 
+            error: error instanceof Error ? error.message : "Retry failed. Please try again.",
+            status: 'error'
+          } : item
+        )
+      );
+    }
+    
+    // Clean up the original failed URL
+    URL.revokeObjectURL(failedPhoto.url);
   }
 
   const goToPreviousStep = () => {
@@ -171,11 +291,20 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
       return
     }
     
-    // Check if images are still uploading
+    // Check if any uploads are still in progress
     if (uploadingPhotos.length > 0) {
-      const hasUploadingImages = uploadingPhotos.some(photo => !photo.error && photo.progress < 100)
-      if (hasUploadingImages) {
+      const hasActiveUploads = uploadingPhotos.some(photo => 
+        photo.status === 'uploading' || photo.status === 'processing'
+      )
+      if (hasActiveUploads) {
         setValidationMessage("Please wait for all images to finish uploading before proceeding")
+        return
+      }
+      
+      // Check if any uploads failed
+      const hasFailedUploads = uploadingPhotos.some(photo => photo.status === 'error')
+      if (hasFailedUploads) {
+        setValidationMessage("Some images failed to upload. Please remove failed uploads or try again")
         return
       }
     }
@@ -232,17 +361,42 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
             Drag and drop your photos here, or click to browse
           </p>
           <p className="text-sm text-gray-400">
-            Supports: JPG, PNG, GIF (Max 10 photos, 2MB each)
+            Supports: JPG, PNG, WebP, HEIC (Max 10 photos, 10MB each)
           </p>
           <input
             ref={fileInputRef}
             type="file"
             multiple
             accept="image/*"
+            capture={isMobile ? "environment" : undefined}
             className="hidden"
             onChange={handleFileChange}
             disabled={disableForm}
           />
+        </div>
+
+        {/* Mobile-aware upload buttons */}
+        <div className="flex gap-2 justify-center flex-wrap mb-6">
+          <button
+            type="button"
+            onClick={() => triggerImageCapture(fileInputRef, false)}
+            disabled={disableForm}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md inline-flex items-center disabled:opacity-50"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            {isMobile ? "Select from Gallery" : "Select Images"}
+          </button>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => triggerImageCapture(fileInputRef, true)}
+              disabled={disableForm}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md inline-flex items-center disabled:opacity-50"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Take Photo
+            </button>
+          )}
         </div>
 
         {/* Uploading Photos */}
@@ -253,52 +407,69 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {uploadingPhotos.map((photo, index) => (
-                <div key={index} className="relative group">
-                  <img
-                    src={photo.url}
-                    alt={`Uploading ${index + 1}`}
-                    className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                  />
-                  
-                  {/* Progress Overlay */}
-                  {!photo.error && photo.progress < 100 && (
-                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                      <div className="text-white text-center">
-                        <div className="text-sm font-medium">{Math.round(photo.progress)}%</div>
-                        <div className="w-16 bg-gray-300 rounded-full h-2 mt-1">
-                          <div 
-                            className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${photo.progress}%` }}
-                          ></div>
+                <div key={index} className="flex flex-col items-center">
+                  <div className="relative group">
+                    <img
+                      src={photo.url}
+                      alt={`Uploading ${index + 1}`}
+                      className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                    />
+                    
+                    {photo.status === 'error' ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 p-2 rounded-lg">
+                        <AlertCircle className="w-8 h-8 text-red-500 mb-1" />
+                        <div className="text-xs text-center text-white font-medium mb-2">{photo.error}</div>
+                        <button
+                          onClick={() => retryFailedUpload(photo)}
+                          className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : photo.status === 'complete' ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-green-500 bg-opacity-80 rounded-lg">
+                        <div className="flex flex-col items-center">
+                          <CheckCircle className="w-12 h-12 text-white mb-2" />
+                          <div className="text-sm text-white font-medium">Complete!</div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* Success Overlay */}
-                  {!photo.error && photo.progress === 100 && (
-                    <div className="absolute inset-0 bg-green-500 bg-opacity-75 rounded-lg flex items-center justify-center">
-                      <CheckCircle className="h-8 w-8 text-white" />
-                    </div>
-                  )}
-                  
-                  {/* Error Overlay */}
-                  {photo.error && (
-                    <div className="absolute inset-0 bg-red-500 bg-opacity-75 rounded-lg flex items-center justify-center">
-                      <div className="text-white text-center p-2">
-                        <AlertCircle className="h-6 w-6 mx-auto mb-1" />
-                        <div className="text-xs">{photo.error}</div>
+                    ) : photo.status === 'processing' ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-80 rounded-lg">
+                        <div className="flex flex-col items-center">
+                          <Loader2 className="w-10 h-10 text-white animate-spin mb-2" />
+                          <div className="text-sm text-white font-medium">Processing...</div>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* Remove Button */}
-                  <button
-                    onClick={() => removeUploadingPhoto(photo.url)}
-                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 rounded-lg">
+                        <div className="w-3/4">
+                          <div className="h-3 bg-gray-200 bg-opacity-70 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-white rounded-full transition-all duration-300" 
+                              style={{ width: `${photo.progress}%` }}
+                            ></div>
+                          </div>
+                          <div className="text-xs text-center mt-1 text-white font-medium">
+                            Uploading {photo.progress}%
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Remove Button */}
+                    <button
+                      onClick={() => removeUploadingPhoto(photo.url)}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-700 text-center">
+                    {photo.status === 'error' ? 'Failed' : 
+                     photo.status === 'complete' ? 'Complete' : 
+                     photo.status === 'processing' ? 'Processing' : 
+                     `Uploading ${photo.progress}%`}
+                  </div>
                 </div>
               ))}
             </div>
@@ -340,10 +511,11 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
             <div>
               <h4 className="font-medium text-blue-900 mb-2">Photo Guidelines</h4>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Use high-quality, clear images (max 2MB each)</li>
+                <li>• Use high-quality, clear images (max 10MB each)</li>
                 <li>• Ensure good lighting and composition</li>
-                <li>• Photos will be watermarked automatically</li>
+                <li>• Photos will be watermarked and converted to WebP automatically</li>
                 <li>• Images are uploaded to secure cloud storage</li>
+                <li>• Supports JPEG, PNG, WebP, and HEIC formats</li>
                 <li>• Avoid blurry or low-resolution images</li>
               </ul>
             </div>
@@ -364,7 +536,9 @@ export default function AdFormStep2({ disableForm = false }: { disableForm?: boo
             type="button"
             onClick={goToNextStep}
             className="bg-blue-600 text-white font-bold rounded px-8 py-6 hover:bg-blue-700 border border-blue-600 flex-1 text-lg min-w-[140px]"
-            disabled={disableForm}
+            disabled={disableForm || uploadingPhotos.some(photo => 
+              photo.status === 'uploading' || photo.status === 'processing'
+            ) || uploadingPhotos.some(photo => photo.status === 'error')}
           >
             Next
           </button>
